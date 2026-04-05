@@ -6,9 +6,9 @@ COPY go.mod go.sum ./
 
 RUN go mod download
 
-COPY *.go ./
+COPY . .
 
-RUN go build -o game-simulation
+RUN go build -o game-simulation ./cmd/game-simulation
 
 FROM debian:bullseye-slim
 

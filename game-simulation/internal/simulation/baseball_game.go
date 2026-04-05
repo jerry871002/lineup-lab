@@ -1,4 +1,4 @@
-package main
+package simulation
 
 import (
 	"log"
@@ -81,7 +81,7 @@ func (g *BaseballGame) HandleAwardBase(batter *Batter) {
 	debugLogger.Printf("Batter %s is awarded to first base (BB or HBP)", batter.Name)
 	if g.Runners[0] == 0 {
 		g.Runners[0] = 1
-	} else if reflect.DeepEqual(g.Runners, []int{1, 1, 1}) { // Bases loaded
+	} else if reflect.DeepEqual(g.Runners, []int{1, 1, 1}) {
 		debugLogger.Printf("Batter %s got 1 RBI", batter.Name)
 		g.Score++
 	} else if sum(g.Runners) == 2 {

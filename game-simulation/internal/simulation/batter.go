@@ -1,4 +1,4 @@
-package main
+package simulation
 
 type Batter struct {
 	Name       string `json:"name"`

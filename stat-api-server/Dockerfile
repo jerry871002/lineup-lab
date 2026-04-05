@@ -6,9 +6,9 @@ COPY go.mod go.sum ./
 
 RUN go mod download
 
-COPY *.go ./
+COPY . .
 
-RUN go build -o stat-api-server
+RUN go build -o stat-api-server ./cmd/stat-api-server
 
 FROM debian:bullseye-slim
 

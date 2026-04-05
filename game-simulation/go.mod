@@ -1,4 +1,4 @@
-module game-simulation
+module github.com/jerry871002/lineup-lab/game-simulation
 
 go 1.22.5
 

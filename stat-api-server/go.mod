@@ -1,4 +1,4 @@
-module stat-api-server
+module github.com/jerry871002/lineup-lab/stat-api-server
 
 go 1.22.5
 
