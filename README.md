@@ -67,10 +67,10 @@ npm start
 
 The frontend development server uses `frontend/.env.development` to target the local backend services by default:
 
-- `REACT_APP_STAT_API_BASE_URL=http://localhost:8082`
-- `REACT_APP_SIMULATION_API_BASE_URL=http://localhost:8081`
+- `VITE_STAT_API_BASE_URL=http://localhost:8082`
+- `VITE_SIMULATION_API_BASE_URL=http://localhost:8081`
 
-Open [http://localhost:3000](http://localhost:3000) to use the CRA development server.
+Open [http://localhost:3000](http://localhost:3000) to use the Vite development server.
 
 ## Configuration
 
