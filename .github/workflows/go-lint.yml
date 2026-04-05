@@ -1,0 +1,54 @@
+name: Check Go services
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "game-simulation/**"
+      - "stat-api-server/**"
+      - ".github/workflows/go-lint.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "game-simulation/**"
+      - "stat-api-server/**"
+      - ".github/workflows/go-lint.yml"
+  workflow_dispatch:
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - game-simulation
+          - stat-api-server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Verify gofmt
+        working-directory: ${{ matrix.module }}
+        run: |
+          unformatted="$(gofmt -l $(find . -name '*.go' -type f | sort))"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
+          working-directory: ${{ matrix.module }}
