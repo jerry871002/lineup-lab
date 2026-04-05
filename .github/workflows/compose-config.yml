@@ -1,0 +1,56 @@
+name: Validate Compose config
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "docker-compose.yml"
+      - ".env.example"
+      - "frontend/**"
+      - "game-simulation/**"
+      - "stat-api-server/**"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "docker-compose.yml"
+      - ".env.example"
+      - "frontend/**"
+      - "game-simulation/**"
+      - "stat-api-server/**"
+  workflow_dispatch:
+
+jobs:
+  validate-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render default Compose config
+        run: docker compose config > compose-default.yml
+
+      - name: Verify default frontend URLs and port mappings
+        run: |
+          grep -F 'REACT_APP_STAT_API_BASE_URL: http://localhost:8082' compose-default.yml
+          grep -F 'REACT_APP_SIMULATION_API_BASE_URL: http://localhost:8081' compose-default.yml
+          grep -F 'published: "8082"' compose-default.yml
+          grep -F 'published: "8081"' compose-default.yml
+          grep -F 'target: 80' compose-default.yml
+
+      - name: Render Compose config with overridden service ports
+        run: |
+          STAT_API_SERVER_PORT=18080 \
+          STAT_API_SERVER_HOST_PORT=19082 \
+          GAME_SIMULATION_PORT=18081 \
+          GAME_SIMULATION_HOST_PORT=19081 \
+          docker compose config > compose-overrides.yml
+
+      - name: Verify overridden frontend URLs and port mappings
+        run: |
+          grep -F 'REACT_APP_STAT_API_BASE_URL: http://localhost:19082' compose-overrides.yml
+          grep -F 'REACT_APP_SIMULATION_API_BASE_URL: http://localhost:19081' compose-overrides.yml
+          grep -F 'PORT: "18080"' compose-overrides.yml
+          grep -F 'PORT: "18081"' compose-overrides.yml
+          grep -F 'published: "19082"' compose-overrides.yml
+          grep -F 'published: "19081"' compose-overrides.yml
+          grep -F 'target: 18080' compose-overrides.yml
+          grep -F 'target: 18081' compose-overrides.yml
