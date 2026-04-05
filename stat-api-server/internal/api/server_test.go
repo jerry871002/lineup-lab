@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -17,7 +19,7 @@ func TestGetTeams(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := api.NewServer(store.NewMockStatStore())
+	server := api.NewServer(store.NewMockStatStore(), nil)
 
 	response := httptest.NewRecorder()
 	handler := http.HandlerFunc(server.GetTeamsHandler)
@@ -39,7 +41,7 @@ func TestGetBatting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := api.NewServer(store.NewMockStatStore())
+	server := api.NewServer(store.NewMockStatStore(), nil)
 
 	response := httptest.NewRecorder()
 	handler := http.HandlerFunc(server.GetBattingStatHandler)
@@ -66,4 +68,60 @@ func isJSONEqual(obj1, obj2 string) bool {
 		return false
 	}
 	return reflect.DeepEqual(o1, o2)
+}
+
+func TestHealthz(t *testing.T) {
+	server := api.NewServer(store.NewMockStatStore(), nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+
+	handler := api.NewHandler(server, "http://localhost:3000")
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("healthz status = %d, want %d", response.Code, http.StatusOK)
+	}
+}
+
+func TestReadyz(t *testing.T) {
+	testCases := []struct {
+		name       string
+		readyCheck func(context.Context) error
+		wantStatus int
+	}{
+		{
+			name:       "ready without check",
+			readyCheck: nil,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "ready with healthy check",
+			readyCheck: func(context.Context) error {
+				return nil
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "ready with failing check",
+			readyCheck: func(context.Context) error {
+				return errors.New("db down")
+			},
+			wantStatus: http.StatusServiceUnavailable,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			server := api.NewServer(store.NewMockStatStore(), testCase.readyCheck)
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+
+			handler := api.NewHandler(server, "http://localhost:3000")
+			handler.ServeHTTP(response, request)
+
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("readyz status = %d, want %d", response.Code, testCase.wantStatus)
+			}
+		})
+	}
 }
