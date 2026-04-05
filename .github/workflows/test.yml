@@ -1,0 +1,98 @@
+name: Test services and report coverage
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+      - "game-simulation/**"
+      - "stat-api-server/**"
+      - ".github/workflows/test.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+      - "game-simulation/**"
+      - "stat-api-server/**"
+      - ".github/workflows/test.yml"
+  workflow_dispatch:
+
+jobs:
+  go-coverage:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - game-simulation
+          - stat-api-server
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Run Go tests with coverage
+        working-directory: ${{ matrix.module }}
+        run: |
+          go test ./... -coverprofile=coverage.out
+          go tool cover -func=coverage.out | tee coverage.txt
+
+      - name: Add coverage summary
+        working-directory: ${{ matrix.module }}
+        run: |
+          total="$(grep '^total:' coverage.txt | awk '{print $3}')"
+          {
+            echo "### ${{ matrix.module }} coverage"
+            echo
+            echo "- total: ${total}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.module }}-coverage
+          path: |
+            ${{ matrix.module }}/coverage.out
+            ${{ matrix.module }}/coverage.txt
+
+  frontend-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests with coverage
+        working-directory: frontend
+        run: npm run test:coverage
+
+      - name: Add frontend coverage summary
+        working-directory: frontend
+        run: |
+          total="$(node -e "const fs=require('fs'); const summary=JSON.parse(fs.readFileSync('coverage/coverage-summary.json','utf8')); console.log(summary.total.lines.pct + '%')")"
+          {
+            echo "### frontend coverage"
+            echo
+            echo "- total lines: ${total}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload frontend coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: |
+            frontend/coverage
