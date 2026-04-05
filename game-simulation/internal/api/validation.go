@@ -55,6 +55,7 @@ func validateLineup(lineup []simulation.Batter) error {
 	}
 
 	seenNames := make(map[string]int, len(lineup))
+	lineupCanRecordOut := false
 	for i, batter := range lineup {
 		if err := validateBatter(batter, i); err != nil {
 			return err
@@ -66,6 +67,13 @@ func validateLineup(lineup []simulation.Batter) error {
 		}
 
 		seenNames[normalizedName] = i
+		if batter.CanRecordOut() {
+			lineupCanRecordOut = true
+		}
+	}
+
+	if !lineupCanRecordOut {
+		return errors.New("lineup must contain at least one batter with non-zero out probability")
 	}
 
 	return nil

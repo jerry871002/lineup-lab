@@ -83,6 +83,17 @@ func TestValidateLineupRejectsInvalidLineup(t *testing.T) {
 			}(),
 			wantErr: `duplicates batter 0 name "Mike Trout"`,
 		},
+		{
+			name: "lineup cannot record an out",
+			lineup: func() []simulation.Batter {
+				lineup := mustDecodeLineup(t, validLineupJSON)
+				for i := range lineup {
+					lineup[i].Hit = lineup[i].AtBat
+				}
+				return lineup
+			}(),
+			wantErr: "lineup must contain at least one batter with non-zero out probability",
+		},
 	}
 
 	for _, testCase := range testCases {

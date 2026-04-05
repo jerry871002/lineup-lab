@@ -42,6 +42,39 @@ func TestBatterOutProbability(t *testing.T) {
 	}
 }
 
+func TestBatterCanRecordOut(t *testing.T) {
+	testCases := []struct {
+		name string
+		b    *Batter
+		want bool
+	}{
+		{
+			name: "can record out",
+			b: &Batter{
+				AtBat: 100,
+				Hit:   30,
+			},
+			want: true,
+		},
+		{
+			name: "cannot record out",
+			b: &Batter{
+				AtBat: 100,
+				Hit:   100,
+			},
+			want: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.b.CanRecordOut(); got != testCase.want {
+				t.Fatalf("Batter.CanRecordOut() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestBatterBallOnBaseProbability(t *testing.T) {
 	b := &Batter{
 		AtBat:      100,

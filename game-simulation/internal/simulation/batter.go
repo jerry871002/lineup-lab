@@ -19,6 +19,10 @@ func (b *Batter) PlateAppearance() int {
 	return b.AtBat + b.BallOnBase + b.HitByPitch
 }
 
+func (b *Batter) CanRecordOut() bool {
+	return b.AtBat > b.Hit
+}
+
 func (b *Batter) OutProbability() float64 {
 	return float64(b.AtBat-b.Hit) / float64(b.PlateAppearance())
 }
