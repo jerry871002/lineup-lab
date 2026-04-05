@@ -1,5 +1,5 @@
 import React from 'react';
-import LineupSlot from './LineupSlot';
+import LineupSlot from './LineupSlot.jsx';
 
 const Lineup = ({ lineup, movePlayerToSlot, removePlayerFromSlot, simulateLineup, simulationResult }) => {
   return (

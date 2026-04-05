@@ -19,4 +19,9 @@ npm start
 
 The development server loads API URLs from `frontend/.env.development`, so it targets the local backend services by default.
 
+To run the frontend tests, use:
+```sh
+npm test
+```
+
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.

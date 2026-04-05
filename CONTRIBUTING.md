@@ -43,6 +43,9 @@ Follow the roadmap in milestone order unless there is a clear dependency reason 
 
 Every PR should:
 
+- Use the title format `<area>: <short summary>`.
+- Match the commit message style for the first line.
+- Do not prefix PR titles with `[codex]`.
 - Link the related issue with `Closes #<number>` or `Refs #<number>`.
 - Explain what changed and why.
 - Include verification notes:
