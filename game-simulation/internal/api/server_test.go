@@ -115,6 +115,12 @@ func TestSimulateHandlerRejectsInvalidPayloads(t *testing.T) {
 			wantStatusCode: http.StatusBadRequest,
 			wantBody:       `duplicates batter 0 name "Mike Trout"`,
 		},
+		{
+			name:           "lineup cannot record an out",
+			body:           impossibleOutLineupJSON,
+			wantStatusCode: http.StatusBadRequest,
+			wantBody:       "lineup must contain at least one batter with non-zero out probability",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -149,3 +155,15 @@ var validBatters = []string{
 }
 
 var validLineupJSON = `[` + strings.Join(validBatters, ",") + `]`
+
+var impossibleOutLineupJSON = `[` + strings.Join([]string{
+	`{"name":"Mike Trout","at_bat":100,"hit":100,"double":5,"triple":1,"home_run":4,"ball_on_base":10,"hit_by_pitch":2}`,
+	`{"name":"Mookie Betts","at_bat":100,"hit":100,"double":6,"triple":0,"home_run":3,"ball_on_base":12,"hit_by_pitch":1}`,
+	`{"name":"Aaron Judge","at_bat":100,"hit":100,"double":7,"triple":2,"home_run":5,"ball_on_base":8,"hit_by_pitch":3}`,
+	`{"name":"Freddie Freeman","at_bat":100,"hit":100,"double":8,"triple":1,"home_run":6,"ball_on_base":9,"hit_by_pitch":2}`,
+	`{"name":"Juan Soto","at_bat":100,"hit":100,"double":4,"triple":2,"home_run":3,"ball_on_base":11,"hit_by_pitch":1}`,
+	`{"name":"Fernando Tatis Jr.","at_bat":100,"hit":100,"double":5,"triple":1,"home_run":4,"ball_on_base":10,"hit_by_pitch":2}`,
+	`{"name":"Bryce Harper","at_bat":100,"hit":100,"double":6,"triple":0,"home_run":3,"ball_on_base":12,"hit_by_pitch":1}`,
+	`{"name":"Ronald Acuna Jr.","at_bat":100,"hit":100,"double":7,"triple":2,"home_run":5,"ball_on_base":8,"hit_by_pitch":3}`,
+	`{"name":"Shohei Ohtani","at_bat":100,"hit":100,"double":8,"triple":1,"home_run":6,"ball_on_base":9,"hit_by_pitch":2}`,
+}, ",") + `]`
