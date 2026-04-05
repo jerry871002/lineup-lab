@@ -1,16 +1,18 @@
-package main
+package store
+
+import "github.com/jerry871002/lineup-lab/stat-api-server/internal/api"
 
 type MockStatStore struct {
-	TeamData     []Team
-	BattingData  []map[string]any
+	TeamData    []api.Team
+	BattingData []map[string]any
 }
 
 func NewMockStatStore() *MockStatStore {
 	return &MockStatStore{
-		TeamData: []Team{
-			{"Team1", 2024},
-			{"Team2", 2024},
-			{"Team3", 2024},
+		TeamData: []api.Team{
+			{Name: "Team1", Year: 2024},
+			{Name: "Team2", Year: 2024},
+			{Name: "Team3", Year: 2024},
 		},
 		BattingData: []map[string]any{
 			{"name": "Player1", "at_bat": "50", "hit:": "10"},
@@ -20,7 +22,7 @@ func NewMockStatStore() *MockStatStore {
 	}
 }
 
-func (s *MockStatStore) GetTeams() ([]Team, error) {
+func (s *MockStatStore) GetTeams() ([]api.Team, error) {
 	return s.TeamData, nil
 }
 

@@ -1,21 +1,20 @@
-package main
+package simulation
 
 import (
+	"io"
+	"log"
 	"reflect"
 	"testing"
 )
 
 func TestHandleAwardBase(t *testing.T) {
-	initLogger()
+	ConfigureLoggers(log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
 
-	// First base empty
 	g := &BaseballGame{
 		Runners: []int{0, 0, 0},
 	}
 
-	b := &Batter{
-		Name: "John Doe",
-	}
+	b := &Batter{Name: "John Doe"}
 
 	g.HandleAwardBase(b)
 
@@ -24,7 +23,6 @@ func TestHandleAwardBase(t *testing.T) {
 		t.Errorf("HandleAwardBase() runners = %v, want %v", g.Runners, expectedRunners)
 	}
 
-	// First base occupied
 	g = &BaseballGame{
 		Runners: []int{1, 0, 0},
 	}
@@ -36,7 +34,6 @@ func TestHandleAwardBase(t *testing.T) {
 		t.Errorf("HandleAwardBase() runners = %v, want %v", g.Runners, expectedRunners)
 	}
 
-	// Bases loaded
 	g = &BaseballGame{
 		Runners: []int{1, 1, 1},
 		Score:   0,
@@ -56,16 +53,14 @@ func TestHandleAwardBase(t *testing.T) {
 }
 
 func TestHandleHitAdvance(t *testing.T) {
-	initLogger()
+	ConfigureLoggers(log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
 
 	g := &BaseballGame{
 		Runners: []int{0, 1, 1},
 		Score:   2,
 	}
 
-	b := &Batter{
-		Name: "John Doe",
-	}
+	b := &Batter{Name: "John Doe"}
 
 	g.HandleHitAdvance(b, 2)
 
@@ -81,17 +76,14 @@ func TestHandleHitAdvance(t *testing.T) {
 }
 
 func TestHandleHomeRun(t *testing.T) {
-	initLogger()
+	ConfigureLoggers(log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
 
-	// Runner on 2nd and 3rd
 	g := &BaseballGame{
 		Runners: []int{0, 1, 1},
 		Score:   2,
 	}
 
-	b := &Batter{
-		Name: "John Doe",
-	}
+	b := &Batter{Name: "John Doe"}
 
 	g.HandleHomeRun(b)
 
@@ -105,7 +97,6 @@ func TestHandleHomeRun(t *testing.T) {
 		t.Errorf("HandleHitAdvance() runners = %v, want %v", g.Runners, expectedRunners)
 	}
 
-	// Bases empty
 	g = &BaseballGame{
 		Runners: []int{0, 0, 0},
 		Score:   0,

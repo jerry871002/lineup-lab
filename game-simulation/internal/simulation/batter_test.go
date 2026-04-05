@@ -1,4 +1,4 @@
-package main
+package simulation
 
 import (
 	"math"
@@ -37,7 +37,7 @@ func TestBatterOutProbability(t *testing.T) {
 		Hit:   30,
 	}
 	expected := 0.7
-	if got := b.OutProbability(); !FloatEqual(got, expected) {
+	if got := b.OutProbability(); !floatEqual(got, expected) {
 		t.Errorf("Batter.OutProbability() = %v, want %v", got, expected)
 	}
 }
@@ -49,7 +49,7 @@ func TestBatterBallOnBaseProbability(t *testing.T) {
 		HitByPitch: 5,
 	}
 	expected := 0.16
-	if got := b.BallOnBaseProbability(); !FloatEqual(got, expected) {
+	if got := b.BallOnBaseProbability(); !floatEqual(got, expected) {
 		t.Errorf("Batter.BallOnBaseProbability() = %v, want %v", got, expected)
 	}
 }
@@ -61,7 +61,7 @@ func TestBatterHitByPitchProbability(t *testing.T) {
 		HitByPitch: 5,
 	}
 	expected := 0.04
-	if got := b.HitByPitchProbability(); !FloatEqual(got, expected) {
+	if got := b.HitByPitchProbability(); !floatEqual(got, expected) {
 		t.Errorf("Batter.HitByPitchProbability() = %v, want %v", got, expected)
 	}
 }
@@ -74,7 +74,7 @@ func TestBatterHitProbability(t *testing.T) {
 		HitByPitch: 5,
 	}
 	expected := 0.24
-	if got := b.HitProbability(); !FloatEqual(got, expected) {
+	if got := b.HitProbability(); !floatEqual(got, expected) {
 		t.Errorf("Batter.HitProbability() = %v, want %v", got, expected)
 	}
 }
@@ -100,7 +100,7 @@ func TestBatterHitAdvanceProbability(t *testing.T) {
 	}
 }
 
-func FloatEqual(a, b float64) bool {
+func floatEqual(a, b float64) bool {
 	epsilon := 1e-9
 	return math.Abs(a-b) < epsilon
 }
