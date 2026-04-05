@@ -17,4 +17,6 @@ To start the development server, run:
 npm start
 ```
 
+The development server loads API URLs from `frontend/.env.development`, so it targets the local backend services by default.
+
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.

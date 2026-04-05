@@ -5,8 +5,17 @@ import Lineup from './Lineup';
 import Roster from './Roster';
 import './App.css';
 
-const statApiBaseUrl = (process.env.REACT_APP_STAT_API_BASE_URL || 'http://localhost:8082').replace(/\/$/, '');
-const simulationApiBaseUrl = (process.env.REACT_APP_SIMULATION_API_BASE_URL || 'http://localhost:8081').replace(/\/$/, '');
+const requireEnv = (key) => {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`${key} must be set`);
+  }
+
+  return value.replace(/\/$/, '');
+};
+
+const statApiBaseUrl = requireEnv('REACT_APP_STAT_API_BASE_URL');
+const simulationApiBaseUrl = requireEnv('REACT_APP_SIMULATION_API_BASE_URL');
 
 const App = () => {
   const [teams, setTeams] = useState([]);
