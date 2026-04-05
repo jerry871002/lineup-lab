@@ -26,7 +26,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Render default Compose config
-        run: docker compose config --format json > compose-default.json
+        run: |
+          POSTGRES_DB=mydatabase \
+          POSTGRES_USER=myuser \
+          POSTGRES_PASSWORD=change-me \
+          PGADMIN_DEFAULT_EMAIL=admin@admin.com \
+          PGADMIN_DEFAULT_PASSWORD=change-me \
+          STAT_API_SERVER_DATABASE_URL=postgres://myuser:change-me@db/mydatabase?sslmode=disable \
+          docker compose config --format json > compose-default.json
 
       - name: Verify default frontend URLs and port mappings
         run: |
@@ -38,11 +45,20 @@ jobs:
 
           services = compose["services"]
           frontend_args = services["frontend"]["build"]["args"]
+          db_service = services["db"]
+          pgadmin_service = services["pgadmin"]
+          stat_service = services["stat-api-server"]
           stat_port = services["stat-api-server"]["ports"][0]
           simulation_port = services["game-simulation"]["ports"][0]
 
           assert frontend_args["REACT_APP_STAT_API_BASE_URL"] == "http://localhost:8082"
           assert frontend_args["REACT_APP_SIMULATION_API_BASE_URL"] == "http://localhost:8081"
+          assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
+          assert db_service["environment"]["POSTGRES_USER"] == "myuser"
+          assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
+          assert pgadmin_service["environment"]["PGADMIN_DEFAULT_EMAIL"] == "admin@admin.com"
+          assert pgadmin_service["environment"]["PGADMIN_DEFAULT_PASSWORD"] == "change-me"
+          assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@db/mydatabase?sslmode=disable"
           assert stat_port["published"] == "8082"
           assert stat_port["target"] == 80
           assert simulation_port["published"] == "8081"
@@ -51,6 +67,12 @@ jobs:
 
       - name: Render Compose config with overridden service ports
         run: |
+          POSTGRES_DB=mydatabase \
+          POSTGRES_USER=myuser \
+          POSTGRES_PASSWORD=change-me \
+          PGADMIN_DEFAULT_EMAIL=admin@admin.com \
+          PGADMIN_DEFAULT_PASSWORD=change-me \
+          STAT_API_SERVER_DATABASE_URL=postgres://myuser:change-me@db/mydatabase?sslmode=disable \
           STAT_API_SERVER_PORT=18080 \
           STAT_API_SERVER_HOST_PORT=19082 \
           GAME_SIMULATION_PORT=18081 \
@@ -67,6 +89,8 @@ jobs:
 
           services = compose["services"]
           frontend_args = services["frontend"]["build"]["args"]
+          db_service = services["db"]
+          pgadmin_service = services["pgadmin"]
           stat_service = services["stat-api-server"]
           simulation_service = services["game-simulation"]
           stat_port = stat_service["ports"][0]
@@ -74,10 +98,25 @@ jobs:
 
           assert frontend_args["REACT_APP_STAT_API_BASE_URL"] == "http://localhost:19082"
           assert frontend_args["REACT_APP_SIMULATION_API_BASE_URL"] == "http://localhost:19081"
+          assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
+          assert db_service["environment"]["POSTGRES_USER"] == "myuser"
+          assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
+          assert pgadmin_service["environment"]["PGADMIN_DEFAULT_EMAIL"] == "admin@admin.com"
+          assert pgadmin_service["environment"]["PGADMIN_DEFAULT_PASSWORD"] == "change-me"
           assert stat_service["environment"]["PORT"] == "18080"
+          assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@db/mydatabase?sslmode=disable"
           assert stat_port["published"] == "19082"
           assert stat_port["target"] == 18080
           assert simulation_service["environment"]["PORT"] == "18081"
           assert simulation_port["published"] == "19081"
           assert simulation_port["target"] == 18081
           PY
+
+      - name: Verify missing required env fails fast
+        run: |
+          if docker compose config >/tmp/compose-missing-env.log 2>&1; then
+            echo "docker compose config unexpectedly succeeded without required env vars"
+            exit 1
+          fi
+
+          grep -F "STAT_API_SERVER_DATABASE_URL must be set" /tmp/compose-missing-env.log

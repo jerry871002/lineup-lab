@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	connStr := getEnv("DATABASE_URL", "postgres://myuser:mypassword@db/mydatabase?sslmode=disable")
+	connStr := mustGetEnv("DATABASE_URL")
 	port := getEnv("PORT", "80")
 	allowedOrigin := getEnv("ALLOWED_ORIGIN", "*")
 
@@ -35,4 +35,12 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func mustGetEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		log.Fatalf("%s must be set", key)
+	}
+	return value
 }
