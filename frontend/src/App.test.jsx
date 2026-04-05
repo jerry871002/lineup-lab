@@ -85,9 +85,11 @@ describe('App', () => {
 
     render(<App />);
 
+    const yankeesOption = await screen.findByRole('option', { name: 'Yankees (2024)' });
+
     await user.selectOptions(
       await screen.findByRole('combobox'),
-      'Yankees+2024'
+      yankeesOption
     );
 
     await waitFor(() => {

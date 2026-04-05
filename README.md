@@ -146,9 +146,41 @@ Current GitHub Actions coverage includes:
   - `gofmt`
   - `go vet`
   - `golangci-lint`
-- Go service build/test workflows
+- Per-service coverage reporting
   - `game-simulation`
   - `stat-api-server`
+  - `frontend`
+- Frontend build validation
+  - `vite build`
+
+The project reports per-service coverage instead of relying on a single overall percentage, because the frontend and the Go services have different testing surfaces and responsibilities.
+
+## Running Coverage Locally
+
+### `game-simulation`
+
+```sh
+cd game-simulation
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
+
+### `stat-api-server`
+
+```sh
+cd stat-api-server
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
+
+### `frontend`
+
+```sh
+cd frontend
+npm run test:coverage
+```
+
+The frontend coverage summary is written to `frontend/coverage/coverage-summary.json`, and the HTML report is generated under `frontend/coverage/`.
 
 ## Repository Pointers
 
