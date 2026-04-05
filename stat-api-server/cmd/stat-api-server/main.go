@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
@@ -23,7 +24,9 @@ func main() {
 	defer db.Close()
 	log.Println("Connected to database")
 
-	server := api.NewServer(store.NewSQLStatStore(db))
+	server := api.NewServer(store.NewSQLStatStore(db), func(ctx context.Context) error {
+		return db.PingContext(ctx)
+	})
 	handler := api.NewHandler(server, allowedOrigin)
 
 	log.Printf("Server started at :%s", port)

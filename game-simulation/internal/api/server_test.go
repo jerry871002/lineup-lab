@@ -19,6 +19,35 @@ func TestSimulateHandlerAcceptsValidPayload(t *testing.T) {
 	}
 }
 
+func TestHealthAndReadinessHandlers(t *testing.T) {
+	handler := NewHandler(true, "http://localhost:3000")
+
+	testCases := []struct {
+		name   string
+		path   string
+		method string
+		want   int
+	}{
+		{name: "health ok", path: "/healthz", method: http.MethodGet, want: http.StatusOK},
+		{name: "ready ok", path: "/readyz", method: http.MethodGet, want: http.StatusOK},
+		{name: "health rejects post", path: "/healthz", method: http.MethodPost, want: http.StatusMethodNotAllowed},
+		{name: "ready rejects post", path: "/readyz", method: http.MethodPost, want: http.StatusMethodNotAllowed},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(testCase.method, testCase.path, nil)
+			response := httptest.NewRecorder()
+
+			handler.ServeHTTP(response, request)
+
+			if response.Code != testCase.want {
+				t.Fatalf("%s status = %d, want %d", testCase.path, response.Code, testCase.want)
+			}
+		})
+	}
+}
+
 func TestSimulateHandlerRejectsInvalidPayloads(t *testing.T) {
 	testCases := []struct {
 		name           string

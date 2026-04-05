@@ -18,12 +18,32 @@ func NewHandler(debugMode bool, allowedOrigin string) http.Handler {
 	server := &Server{debugMode: debugMode}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", server.healthHandler)
+	mux.HandleFunc("/readyz", server.readyHandler)
 	mux.HandleFunc("/simulate", server.simulateHandler)
 	mux.HandleFunc("/optimize", server.optimizeHandler)
 
 	return cors.New(cors.Options{
 		AllowedOrigins: []string{allowedOrigin},
 	}).Handler(mux)
+}
+
+func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) simulateHandler(w http.ResponseWriter, r *http.Request) {

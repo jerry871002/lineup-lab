@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -21,22 +23,50 @@ type StatStore interface {
 }
 
 type Server struct {
-	store StatStore
+	store      StatStore
+	readyCheck func(context.Context) error
 }
 
-func NewServer(store StatStore) *Server {
-	return &Server{store: store}
+func NewServer(store StatStore, readyCheck func(context.Context) error) *Server {
+	return &Server{
+		store:      store,
+		readyCheck: readyCheck,
+	}
 }
 
 func NewHandler(server *Server, allowedOrigin string) http.Handler {
 	router := mux.NewRouter()
 	router.StrictSlash(true)
+	router.HandleFunc("/healthz", server.HealthHandler).Methods(http.MethodGet)
+	router.HandleFunc("/readyz", server.ReadyHandler).Methods(http.MethodGet)
 	router.HandleFunc("/teams", server.GetTeamsHandler).Methods(http.MethodGet)
 	router.HandleFunc("/batting", server.GetBattingStatHandler).Methods(http.MethodGet)
 
 	return cors.New(cors.Options{
 		AllowedOrigins: []string{allowedOrigin},
 	}).Handler(router)
+}
+
+func (s *Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) ReadyHandler(w http.ResponseWriter, r *http.Request) {
+	if s.readyCheck == nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := s.readyCheck(ctx); err != nil {
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+		log.Println(err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) GetTeamsHandler(w http.ResponseWriter, r *http.Request) {
