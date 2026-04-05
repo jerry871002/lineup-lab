@@ -5,6 +5,9 @@ import Lineup from './Lineup';
 import Roster from './Roster';
 import './App.css';
 
+const statApiBaseUrl = (process.env.REACT_APP_STAT_API_BASE_URL || 'http://localhost:8082').replace(/\/$/, '');
+const simulationApiBaseUrl = (process.env.REACT_APP_SIMULATION_API_BASE_URL || 'http://localhost:8081').replace(/\/$/, '');
+
 const App = () => {
   const [teams, setTeams] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState('');
@@ -13,7 +16,7 @@ const App = () => {
   const [simulationResult, setSimulationResult] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:8082/teams/')
+    fetch(`${statApiBaseUrl}/teams/`)
       .then(response => response.json())
       .then(data => setTeams(data))
       .catch(error => console.error('Error fetching teams:', error));
@@ -22,7 +25,7 @@ const App = () => {
   useEffect(() => {
     if (selectedTeam) {
       const [name, year] = selectedTeam.split('+');
-      fetch(`http://localhost:8082/batting/?team=${name}&year=${year}`)
+      fetch(`${statApiBaseUrl}/batting/?team=${name}&year=${year}`)
         .then(response => response.json())
         .then(data => {
           // add AVG, OBP, SLG to the player data
@@ -82,7 +85,7 @@ const App = () => {
   };
 
   const simulateLineup = async () => {
-    const response = await fetch('http://localhost:8081/simulate', {
+    const response = await fetch(`${simulationApiBaseUrl}/simulate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
