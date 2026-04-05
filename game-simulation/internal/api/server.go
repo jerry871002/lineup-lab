@@ -35,15 +35,10 @@ func (s *Server) simulateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lineup []simulation.Batter
-	if err := json.NewDecoder(r.Body).Decode(&lineup); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	lineup, err := decodeAndValidateLineup(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Println(err)
-		return
-	}
-
-	if len(lineup) != 9 {
-		http.Error(w, "Lineup must have 9 batters", http.StatusBadRequest)
 		return
 	}
 
@@ -51,7 +46,7 @@ func (s *Server) simulateHandler(w http.ResponseWriter, r *http.Request) {
 	result := simulation.SimulateGamesInParallel(lineup, numGames, numBatches)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(result)
+	_ = writeJSON(w, result)
 }
 
 func (s *Server) optimizeHandler(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +67,7 @@ func (s *Server) optimizeHandler(w http.ResponseWriter, r *http.Request) {
 	lineup := optimizer.Optimize(roster)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(lineup)
+	_ = writeJSON(w, lineup)
 }
 
 func (s *Server) simulationConfig() (int, int) {
