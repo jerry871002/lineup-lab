@@ -1,7 +1,7 @@
 import React from 'react';
 import { useDrop } from 'react-dnd';
 import { ItemTypes } from './ItemTypes';
-import Player from './Player';
+import Player from './Player.jsx';
 import { IoPersonRemove } from 'react-icons/io5';
 
 

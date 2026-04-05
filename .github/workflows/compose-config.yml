@@ -51,8 +51,8 @@ jobs:
           stat_port = services["stat-api-server"]["ports"][0]
           simulation_port = services["game-simulation"]["ports"][0]
 
-          assert frontend_args["REACT_APP_STAT_API_BASE_URL"] == "http://localhost:8082"
-          assert frontend_args["REACT_APP_SIMULATION_API_BASE_URL"] == "http://localhost:8081"
+          assert frontend_args["VITE_STAT_API_BASE_URL"] == "http://localhost:8082"
+          assert frontend_args["VITE_SIMULATION_API_BASE_URL"] == "http://localhost:8081"
           assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
           assert db_service["environment"]["POSTGRES_USER"] == "myuser"
           assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
@@ -96,8 +96,8 @@ jobs:
           stat_port = stat_service["ports"][0]
           simulation_port = simulation_service["ports"][0]
 
-          assert frontend_args["REACT_APP_STAT_API_BASE_URL"] == "http://localhost:19082"
-          assert frontend_args["REACT_APP_SIMULATION_API_BASE_URL"] == "http://localhost:19081"
+          assert frontend_args["VITE_STAT_API_BASE_URL"] == "http://localhost:19082"
+          assert frontend_args["VITE_SIMULATION_API_BASE_URL"] == "http://localhost:19081"
           assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
           assert db_service["environment"]["POSTGRES_USER"] == "myuser"
           assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"

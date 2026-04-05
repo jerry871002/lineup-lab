@@ -3,8 +3,8 @@ services:
     build:
       context: ./frontend
       args:
-        REACT_APP_STAT_API_BASE_URL: ${REACT_APP_STAT_API_BASE_URL:-http://localhost:${STAT_API_SERVER_HOST_PORT:-8082}}
-        REACT_APP_SIMULATION_API_BASE_URL: ${REACT_APP_SIMULATION_API_BASE_URL:-http://localhost:${GAME_SIMULATION_HOST_PORT:-8081}}
+        VITE_STAT_API_BASE_URL: ${VITE_STAT_API_BASE_URL:-http://localhost:${STAT_API_SERVER_HOST_PORT:-8082}}
+        VITE_SIMULATION_API_BASE_URL: ${VITE_SIMULATION_API_BASE_URL:-http://localhost:${GAME_SIMULATION_HOST_PORT:-8081}}
     ports:
       - 8080:80
     depends_on:

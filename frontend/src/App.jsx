@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import Lineup from './Lineup';
-import Roster from './Roster';
+import Lineup from './Lineup.jsx';
+import Roster from './Roster.jsx';
 import './App.css';
 
 const getApiBaseUrl = (key, fallback) => {
-  const value = process.env[key] || fallback;
+  const value = import.meta.env[key] || fallback;
   return value.replace(/\/$/, '');
 };
 
-const statApiBaseUrl = getApiBaseUrl('REACT_APP_STAT_API_BASE_URL', 'http://localhost:8082');
-const simulationApiBaseUrl = getApiBaseUrl('REACT_APP_SIMULATION_API_BASE_URL', 'http://localhost:8081');
+const statApiBaseUrl = getApiBaseUrl('VITE_STAT_API_BASE_URL', 'http://localhost:8082');
+const simulationApiBaseUrl = getApiBaseUrl('VITE_SIMULATION_API_BASE_URL', 'http://localhost:8081');
 
 const App = () => {
   const [teams, setTeams] = useState([]);

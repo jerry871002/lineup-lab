@@ -1,5 +1,5 @@
 import React from 'react';
-import Player from './Player';
+import Player from './Player.jsx';
 
 const Roster = ({ players, teams, selectedTeam, onTeamChange }) => {
   return (
