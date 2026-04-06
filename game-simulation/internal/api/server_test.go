@@ -1,10 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jerry871002/lineup-lab/game-simulation/internal/simulation"
 )
 
 func TestSimulateHandlerAcceptsValidPayload(t *testing.T) {
@@ -140,6 +144,73 @@ func TestSimulateHandlerRejectsInvalidPayloads(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOptimizeHandler(t *testing.T) {
+	originalOptimizer := newOptimizer
+	t.Cleanup(func() {
+		newOptimizer = originalOptimizer
+	})
+
+	handler := NewHandler(true, "http://localhost:3000")
+
+	t.Run("rejects invalid method", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "/optimize", nil)
+		response := httptest.NewRecorder()
+
+		handler.ServeHTTP(response, request)
+
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("optimizeHandler status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+		}
+	})
+
+	t.Run("rejects invalid body", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/optimize", strings.NewReader(`{`))
+		response := httptest.NewRecorder()
+
+		handler.ServeHTTP(response, request)
+
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("optimizeHandler status = %d, want %d", response.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("returns optimized lineup", func(t *testing.T) {
+		expectedLineup := []simulation.Batter{
+			{Name: "Lead Off", AtBat: 10, Hit: 3},
+			{Name: "Slugger", AtBat: 10, Hit: 4},
+		}
+		newOptimizer = func() simulation.Optimizer {
+			return stubOptimizer{lineup: expectedLineup}
+		}
+
+		request := httptest.NewRequest(http.MethodPost, "/optimize", strings.NewReader(validLineupJSON))
+		response := httptest.NewRecorder()
+
+		handler.ServeHTTP(response, request)
+
+		if response.Code != http.StatusOK {
+			t.Fatalf("optimizeHandler status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+		}
+
+		var lineup []simulation.Batter
+		if err := json.NewDecoder(response.Body).Decode(&lineup); err != nil {
+			t.Fatalf("json.Decode() error = %v", err)
+		}
+
+		if !reflect.DeepEqual(lineup, expectedLineup) {
+			t.Fatalf("optimized lineup = %+v, want %+v", lineup, expectedLineup)
+		}
+	})
+}
+
+type stubOptimizer struct {
+	lineup simulation.Lineup
+}
+
+func (s stubOptimizer) Optimize(simulation.Roster) simulation.Lineup {
+	return s.lineup
 }
 
 var validBatters = []string{
