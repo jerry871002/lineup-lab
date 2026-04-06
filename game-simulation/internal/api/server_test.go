@@ -34,8 +34,11 @@ func TestHealthAndReadinessHandlers(t *testing.T) {
 	}{
 		{name: "health ok", path: "/healthz", method: http.MethodGet, want: http.StatusOK},
 		{name: "ready ok", path: "/readyz", method: http.MethodGet, want: http.StatusOK},
+		{name: "health slash not found", path: "/healthz/", method: http.MethodGet, want: http.StatusNotFound},
+		{name: "ready slash not found", path: "/readyz/", method: http.MethodGet, want: http.StatusNotFound},
 		{name: "health rejects post", path: "/healthz", method: http.MethodPost, want: http.StatusMethodNotAllowed},
 		{name: "ready rejects post", path: "/readyz", method: http.MethodPost, want: http.StatusMethodNotAllowed},
+		{name: "simulate slash not found", path: "/simulate/", method: http.MethodPost, want: http.StatusNotFound},
 	}
 
 	for _, testCase := range testCases {

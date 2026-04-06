@@ -12,22 +12,26 @@ This directory contains the React frontend for Lineup Lab.
 
 ## Usage
 
-To start the development server, run:
+Run the full local stack from the repository root:
 
 ```sh
-npm start
+docker compose up --build
 ```
 
-The development server loads API URLs from `frontend/.env.development`, so it targets the local backend services by default.
+Then open [http://localhost:8080](http://localhost:8080).
 
-- `VITE_STAT_API_BASE_URL=http://localhost:8082`
-- `VITE_SIMULATION_API_BASE_URL=http://localhost:8081`
+The browser-facing app is served through the `gateway` service, which also proxies `/api/*` to the internal Go services.
 
-To run the frontend tests, use:
+To run the frontend tests from this directory, use:
+
 ```sh
 npm test
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser with the Vite development server.
+To validate the production bundle from this directory, use:
+
+```sh
+npm run build
+```
 
 For the full local architecture, Docker Compose workflow, and environment variable setup, use the repository root README.

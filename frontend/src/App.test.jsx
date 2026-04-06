@@ -46,7 +46,7 @@ describe('App', () => {
 
     expect(await screen.findByRole('option', { name: 'Yankees (2024)' })).toBeInTheDocument();
     expect(await screen.findByRole('option', { name: 'Mets (2023)' })).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledWith('http://localhost:8082/teams/');
+    expect(global.fetch).toHaveBeenCalledWith('/api/teams');
   });
 
   it('loads roster data after selecting a team', async () => {
@@ -95,7 +95,7 @@ describe('App', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenNthCalledWith(
         2,
-        'http://localhost:8082/batting/?team=Yankees&year=2024'
+        '/api/batting?team=Yankees&year=2024'
       );
     });
 
