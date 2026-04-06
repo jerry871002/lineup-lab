@@ -14,6 +14,10 @@ type Server struct {
 	debugMode bool
 }
 
+var newOptimizer = func() simulation.Optimizer {
+	return simulation.NewGeneticOptimizer(50, 50, 0.2)
+}
+
 func NewHandler(debugMode bool, allowedOrigin string) http.Handler {
 	server := &Server{debugMode: debugMode}
 
@@ -83,7 +87,7 @@ func (s *Server) optimizeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	optimizer := simulation.NewGeneticOptimizer(50, 50, 0.2)
+	optimizer := newOptimizer()
 	lineup := optimizer.Optimize(roster)
 
 	w.Header().Set("Content-Type", "application/json")

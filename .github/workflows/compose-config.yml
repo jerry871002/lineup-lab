@@ -22,16 +22,17 @@ on:
 jobs:
   validate-compose:
     runs-on: ubuntu-latest
+    env:
+      POSTGRES_DB: mydatabase
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: change-me
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: change-me
     steps:
       - uses: actions/checkout@v5
 
       - name: Render default Compose config
         run: |
-          POSTGRES_DB=mydatabase \
-          POSTGRES_USER=myuser \
-          POSTGRES_PASSWORD=change-me \
-          PGADMIN_DEFAULT_EMAIL=admin@admin.com \
-          PGADMIN_DEFAULT_PASSWORD=change-me \
           STAT_API_SERVER_DATABASE_URL=postgres://myuser:change-me@db/mydatabase?sslmode=disable \
           docker compose config --format json > compose-default.json
 
@@ -67,11 +68,6 @@ jobs:
 
       - name: Render Compose config with overridden service ports
         run: |
-          POSTGRES_DB=mydatabase \
-          POSTGRES_USER=myuser \
-          POSTGRES_PASSWORD=change-me \
-          PGADMIN_DEFAULT_EMAIL=admin@admin.com \
-          PGADMIN_DEFAULT_PASSWORD=change-me \
           STAT_API_SERVER_DATABASE_URL=postgres://myuser:change-me@db/mydatabase?sslmode=disable \
           STAT_API_SERVER_PORT=18080 \
           STAT_API_SERVER_HOST_PORT=19082 \

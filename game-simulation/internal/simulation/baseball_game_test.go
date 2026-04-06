@@ -114,3 +114,121 @@ func TestHandleHomeRun(t *testing.T) {
 		t.Errorf("HandleHitAdvance() runners = %v, want %v", g.Runners, expectedRunners)
 	}
 }
+
+func TestNewBaseballGameResetAndSimulate(t *testing.T) {
+	ConfigureLoggers(log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
+
+	game := NewBaseballGame()
+	game.Reset()
+
+	if game.Inning != 1 || game.Outs != 0 || game.Score != 0 || game.Hits != 0 || game.EndOfGame {
+		t.Fatalf("Reset() produced unexpected game state: %+v", game)
+	}
+
+	game.SimulateGame(alwaysOutLineup())
+
+	if !game.EndOfGame {
+		t.Fatal("SimulateGame() EndOfGame = false, want true")
+	}
+
+	if game.Inning != 9 {
+		t.Fatalf("SimulateGame() inning = %d, want 9", game.Inning)
+	}
+
+	if game.Score != 0 {
+		t.Fatalf("SimulateGame() score = %d, want 0", game.Score)
+	}
+}
+
+func TestSimulateOneBatterOutAndHit(t *testing.T) {
+	ConfigureLoggers(log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
+
+	game := NewBaseballGame()
+	game.Reset()
+
+	game.SimulateOneBatter(&Batter{
+		Name:  "Out Batter",
+		AtBat: 1,
+		Hit:   0,
+	})
+
+	if game.Outs != 1 {
+		t.Fatalf("SimulateOneBatter() outs = %d, want 1", game.Outs)
+	}
+
+	game.Reset()
+	game.SimulateOneBatter(&Batter{
+		Name:    "Home Run Batter",
+		AtBat:   1,
+		Hit:     1,
+		HomeRun: 1,
+	})
+
+	if game.Score != 1 {
+		t.Fatalf("SimulateOneBatter() score = %d, want 1", game.Score)
+	}
+
+	if game.Hits != 1 {
+		t.Fatalf("SimulateOneBatter() hits = %d, want 1", game.Hits)
+	}
+}
+
+func TestHandleOutEndsInningAndGame(t *testing.T) {
+	ConfigureLoggers(log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
+
+	game := &BaseballGame{
+		Inning:  1,
+		Outs:    2,
+		Runners: []int{1, 1, 0},
+	}
+
+	game.HandleOut(&Batter{Name: "Test Batter"})
+
+	if game.Inning != 2 || game.Outs != 0 || !reflect.DeepEqual(game.Runners, []int{0, 0, 0}) {
+		t.Fatalf("HandleOut() did not advance inning correctly: %+v", game)
+	}
+
+	game = &BaseballGame{
+		Inning: 9,
+		Outs:   2,
+	}
+
+	game.HandleOut(&Batter{Name: "Test Batter"})
+
+	if !game.EndOfGame {
+		t.Fatal("HandleOut() EndOfGame = false, want true")
+	}
+}
+
+func TestHandleHitAndGetHitAdvanceBases(t *testing.T) {
+	ConfigureLoggers(log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
+
+	game := &BaseballGame{
+		Runners: []int{1, 0, 0},
+	}
+
+	batter := &Batter{
+		Name:   "Double Batter",
+		AtBat:  1,
+		Hit:    1,
+		Double: 1,
+	}
+
+	if got := game.GetHitAdvanceBases(batter); got != 2 {
+		t.Fatalf("GetHitAdvanceBases() = %d, want 2", got)
+	}
+
+	game.HandleHit(batter)
+
+	if game.Hits != 1 {
+		t.Fatalf("HandleHit() hits = %d, want 1", game.Hits)
+	}
+
+	if game.Score != 0 {
+		t.Fatalf("HandleHit() score = %d, want 0", game.Score)
+	}
+
+	if !reflect.DeepEqual(game.Runners, []int{0, 1, 1}) {
+		t.Fatalf("HandleHit() runners = %v, want %v", game.Runners, []int{0, 1, 1})
+	}
+}
