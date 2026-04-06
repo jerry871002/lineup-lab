@@ -5,13 +5,7 @@ import Lineup from './Lineup.jsx';
 import Roster from './Roster.jsx';
 import './App.css';
 
-const getApiBaseUrl = (key, fallback) => {
-  const value = import.meta.env[key] || fallback;
-  return value.replace(/\/$/, '');
-};
-
-const statApiBaseUrl = getApiBaseUrl('VITE_STAT_API_BASE_URL', 'http://localhost:8082');
-const simulationApiBaseUrl = getApiBaseUrl('VITE_SIMULATION_API_BASE_URL', 'http://localhost:8081');
+const apiBasePath = '/api';
 
 const App = () => {
   const [teams, setTeams] = useState([]);
@@ -21,7 +15,7 @@ const App = () => {
   const [simulationResult, setSimulationResult] = useState(null);
 
   useEffect(() => {
-    fetch(`${statApiBaseUrl}/teams/`)
+    fetch(`${apiBasePath}/teams`)
       .then(response => response.json())
       .then(data => setTeams(data))
       .catch(error => console.error('Error fetching teams:', error));
@@ -30,7 +24,7 @@ const App = () => {
   useEffect(() => {
     if (selectedTeam) {
       const [name, year] = selectedTeam.split('+');
-      fetch(`${statApiBaseUrl}/batting/?team=${name}&year=${year}`)
+      fetch(`${apiBasePath}/batting?team=${name}&year=${year}`)
         .then(response => response.json())
         .then(data => {
           // add AVG, OBP, SLG to the player data
@@ -90,7 +84,7 @@ const App = () => {
   };
 
   const simulateLineup = async () => {
-    const response = await fetch(`${simulationApiBaseUrl}/simulate`, {
+    const response = await fetch(`${apiBasePath}/simulate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

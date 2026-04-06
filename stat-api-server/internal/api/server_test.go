@@ -14,7 +14,7 @@ import (
 )
 
 func TestGetTeams(t *testing.T) {
-	req, err := http.NewRequest(http.MethodGet, "/teams/", nil)
+	req, err := http.NewRequest(http.MethodGet, "/teams", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestGetTeams(t *testing.T) {
 }
 
 func TestGetBatting(t *testing.T) {
-	req, err := http.NewRequest(http.MethodGet, "/batting/?team=test&year=2024", nil)
+	req, err := http.NewRequest(http.MethodGet, "/batting?team=test&year=2024", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,6 +121,35 @@ func TestReadyz(t *testing.T) {
 
 			if response.Code != testCase.wantStatus {
 				t.Fatalf("readyz status = %d, want %d", response.Code, testCase.wantStatus)
+			}
+		})
+	}
+}
+
+func TestRoutesRejectTrailingSlashVariants(t *testing.T) {
+	server := api.NewServer(store.NewMockStatStore(), nil)
+	handler := api.NewHandler(server, "http://localhost:3000")
+
+	testCases := []struct {
+		name string
+		path string
+		want int
+	}{
+		{name: "teams slash", path: "/teams/", want: http.StatusNotFound},
+		{name: "batting slash", path: "/batting/?team=test&year=2024", want: http.StatusNotFound},
+		{name: "ready slash", path: "/readyz/", want: http.StatusNotFound},
+		{name: "health slash", path: "/healthz/", want: http.StatusNotFound},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, testCase.path, nil)
+
+			handler.ServeHTTP(response, request)
+
+			if response.Code != testCase.want {
+				t.Fatalf("%s status = %d, want %d", testCase.path, response.Code, testCase.want)
 			}
 		})
 	}

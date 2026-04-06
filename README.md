@@ -4,10 +4,11 @@ Lineup Lab is a microservice-style baseball lineup simulator built to practice G
 
 ## Local Architecture
 
-The local stack has five services:
+The local Docker Compose stack has five services:
 
-- `frontend`
-  - React app served on `http://localhost:8080`
+- `gateway`
+  - browser-facing reverse proxy on `http://localhost:8080`
+  - serves the built frontend and exposes the single public `/api` surface
 - `stat-api-server`
   - Go API for roster and batting data on `http://localhost:8082`
 - `game-simulation`
@@ -17,11 +18,32 @@ The local stack has five services:
 - `pgadmin`
   - Database admin UI on `http://localhost:8083`
 
-Request flow:
+### Architecture Diagram
 
-1. The frontend requests teams and batting stats from `stat-api-server`
-2. The frontend submits a lineup to `game-simulation`
-3. `stat-api-server` reads batting data from Postgres
+```mermaid
+flowchart LR
+    Browser["Browser"]
+    Gateway["gateway (:8080)\nnginx reverse proxy + static frontend"]
+    Stat["stat-api-server (:8082)\nteam and batting endpoints"]
+    Sim["game-simulation (:8081)\nsimulate and optimize endpoints"]
+    DB["db (:5432)\nPostgres"]
+    PgAdmin["pgadmin (:8083)"]
+
+    Browser -->|"/ and /api/*"| Gateway
+    Gateway -->|"/api/teams, /api/batting"| Stat
+    Gateway -->|"/api/simulate, /api/optimize"| Sim
+    Stat --> DB
+    PgAdmin --> DB
+    Browser --> PgAdmin
+```
+
+Production-style local request flow:
+
+1. The browser talks only to the gateway origin at `http://localhost:8080`
+2. nginx in the gateway routes `/api/teams` and `/api/batting` to `stat-api-server`
+3. nginx in the gateway routes `/api/simulate` and `/api/optimize` to `game-simulation`
+4. `stat-api-server` reads batting data from Postgres
+5. `pgadmin` remains a separate local admin UI on `http://localhost:8083`
 
 ## Local Development
 
@@ -47,30 +69,14 @@ If you change the database credentials, keep `STAT_API_SERVER_DATABASE_URL` in s
 docker compose up --build
 ```
 
-This starts the full local environment with the frontend, both Go services, Postgres, and pgAdmin.
+This starts the full local environment with the gateway, both Go services, Postgres, and pgAdmin.
 
 ### 3. Open the app
 
-- frontend: [http://localhost:8080](http://localhost:8080)
+- gateway and frontend app: [http://localhost:8080](http://localhost:8080)
 - stat API: [http://localhost:8082/teams](http://localhost:8082/teams)
 - simulation API: [http://localhost:8081/healthz](http://localhost:8081/healthz)
 - pgAdmin: [http://localhost:8083](http://localhost:8083)
-
-## Frontend-Only Development
-
-If you want to run the frontend dev server directly:
-
-```sh
-cd frontend
-npm start
-```
-
-The frontend development server uses `frontend/.env.development` to target the local backend services by default:
-
-- `VITE_STAT_API_BASE_URL=http://localhost:8082`
-- `VITE_SIMULATION_API_BASE_URL=http://localhost:8081`
-
-Open [http://localhost:3000](http://localhost:3000) to use the Vite development server.
 
 ## Configuration
 
@@ -104,7 +110,8 @@ Key local environment variables:
 Notes:
 
 - `docker-compose.yml` requires several env vars explicitly and fails fast if they are missing
-- the frontend container build uses service host ports to derive its API base URLs unless you override them explicitly
+- the browser only talks to the gateway origin in Docker Compose; the gateway routes `/api/*` to the internal backend services
+- the frontend source lives in `frontend/`, but the runtime entrypoint is the `gateway` service
 
 ## Health And Readiness Endpoints
 

@@ -36,7 +36,6 @@ func NewServer(store StatStore, readyCheck func(context.Context) error) *Server 
 
 func NewHandler(server *Server, allowedOrigin string) http.Handler {
 	router := mux.NewRouter()
-	router.StrictSlash(true)
 	router.HandleFunc("/healthz", server.HealthHandler).Methods(http.MethodGet)
 	router.HandleFunc("/readyz", server.ReadyHandler).Methods(http.MethodGet)
 	router.HandleFunc("/teams", server.GetTeamsHandler).Methods(http.MethodGet)
