@@ -1,30 +1,29 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-import os
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass(frozen=True)
-class Settings:
-    app_name: str
-    database_url: str | None
-    port: int
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore", populate_by_name=True)
 
+    app_name: str = Field(default="lineup-lab-auth", alias="APP_NAME")
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    port: int = Field(default=8000, alias="PORT", validate_default=True)
 
-def parse_port(value: str) -> int:
-    try:
-        port = int(value)
-    except ValueError as err:
-        raise ValueError("PORT must be a valid integer") from err
+    @field_validator("port", mode="before")
+    @classmethod
+    def validate_port(cls, value: object) -> int:
+        try:
+            port = int(value)
+        except (TypeError, ValueError) as err:
+            raise ValueError("PORT must be a valid integer") from err
 
-    if port <= 0:
-        raise ValueError("PORT must be greater than 0")
+        if port <= 0:
+            raise ValueError("PORT must be greater than 0")
 
-    return port
+        return port
 
 
 def get_settings() -> Settings:
-    port = parse_port(os.getenv("PORT", "8000"))
-    database_url = os.getenv("DATABASE_URL")
-    app_name = os.getenv("APP_NAME", "lineup-lab-auth")
-    return Settings(app_name=app_name, database_url=database_url, port=port)
+    return Settings()
