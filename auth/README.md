@@ -22,6 +22,8 @@ Expected public routes:
 - `POST /auth/logout`
 - `GET /users/me`
 
+Session and CSRF behavior for those routes is defined in [docs/auth-session-strategy.md](../docs/auth-session-strategy.md).
+
 Run locally once dependencies are installed:
 
 ```sh
