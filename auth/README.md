@@ -1,0 +1,29 @@
+# Auth
+
+This service is the planned FastAPI-based home for user and session concerns.
+
+Current scope:
+- health and readiness endpoints
+- database configuration and connectivity checks
+- SQLAlchemy models for the `users` and `sessions` tables
+- placeholder auth and user routes that reserve the public API shape
+
+Ownership:
+- `auth` owns the `users` and `sessions` tables
+- other services should not write auth-domain tables directly
+- the shared Postgres instance does not change that logical ownership model
+
+See the architecture decision record:
+- [docs/adr/0002-auth-owns-users-and-sessions.md](../docs/adr/0002-auth-owns-users-and-sessions.md)
+
+Expected public routes:
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /users/me`
+
+Run locally once dependencies are installed:
+
+```sh
+uvicorn app.main:app --app-dir auth --reload
+```

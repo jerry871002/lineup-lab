@@ -78,8 +78,8 @@ Guidelines:
 - Use an area that helps identify the subsystem quickly.
 - Good area examples:
   - `frontend`
-  - `stat-api-server`
-  - `game-simulation`
+  - `stats`
+  - `simulation`
   - `kubernetes`
   - `auth`
   - `security`

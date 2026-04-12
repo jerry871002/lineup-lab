@@ -9,11 +9,11 @@ The local Docker Compose stack has five services:
 - `gateway`
   - browser-facing reverse proxy on `http://localhost:8080`
   - serves the built frontend and exposes the single public `/api` surface
-- `stat-api-server`
+- `stats`
   - Go API for roster and batting data on `http://localhost:8082`
-- `game-simulation`
+- `simulation`
   - Go API for lineup simulation and optimization on `http://localhost:8081`
-- `db`
+- `postgres`
   - Postgres database on `localhost:5432`
 - `pgadmin`
   - Database admin UI on `http://localhost:8083`
@@ -24,9 +24,9 @@ The local Docker Compose stack has five services:
 flowchart LR
     Browser["Browser"]
     Gateway["gateway (:8080)\nnginx reverse proxy + static frontend"]
-    Stat["stat-api-server (:8082)\nteam and batting endpoints"]
-    Sim["game-simulation (:8081)\nsimulate and optimize endpoints"]
-    DB["db (:5432)\nPostgres"]
+    Stat["stats (:8082)\nteam and batting endpoints"]
+    Sim["simulation (:8081)\nsimulate and optimize endpoints"]
+    DB["postgres (:5432)\nPostgres"]
     PgAdmin["pgadmin (:8083)"]
 
     Browser -->|"/ and /api/*"| Gateway
@@ -40,9 +40,9 @@ flowchart LR
 Production-style local request flow:
 
 1. The browser talks only to the gateway origin at `http://localhost:8080`
-2. nginx in the gateway routes `/api/teams` and `/api/batting` to `stat-api-server`
-3. nginx in the gateway routes `/api/simulate` and `/api/optimize` to `game-simulation`
-4. `stat-api-server` reads batting data from Postgres
+2. nginx in the gateway routes `/api/teams` and `/api/batting` to `stats`
+3. nginx in the gateway routes `/api/simulate` and `/api/optimize` to `simulation`
+4. `stats` reads batting data from Postgres
 5. `pgadmin` remains a separate local admin UI on `http://localhost:8083`
 
 ## Local Development
@@ -59,9 +59,9 @@ The default `.env.example` values are set up for local development, but you shou
 
 - `POSTGRES_PASSWORD`
 - `PGADMIN_DEFAULT_PASSWORD`
-- `STAT_API_SERVER_DATABASE_URL`
+- `STATS_DATABASE_URL`
 
-If you change the database credentials, keep `STAT_API_SERVER_DATABASE_URL` in sync with them.
+If you change the database credentials, keep `STATS_DATABASE_URL` in sync with them.
 
 ### 2. Start the stack with Docker Compose
 
@@ -87,20 +87,20 @@ Key local environment variables:
 - `POSTGRES_DB`
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
-- `STAT_API_SERVER_DATABASE_URL`
+- `STATS_DATABASE_URL`
 
 ### Service ports
 
-- `STAT_API_SERVER_PORT`
-- `STAT_API_SERVER_HOST_PORT`
-- `GAME_SIMULATION_PORT`
-- `GAME_SIMULATION_HOST_PORT`
+- `STATS_PORT`
+- `STATS_HOST_PORT`
+- `SIMULATION_PORT`
+- `SIMULATION_HOST_PORT`
 
 ### Service behavior
 
-- `STAT_API_SERVER_ALLOWED_ORIGIN`
-- `GAME_SIMULATION_ALLOWED_ORIGIN`
-- `GAME_SIMULATION_DEBUG`
+- `STATS_ALLOWED_ORIGIN`
+- `SIMULATION_ALLOWED_ORIGIN`
+- `SIMULATION_DEBUG`
 
 ### Database admin
 
@@ -117,14 +117,14 @@ Notes:
 
 Both Go services expose Kubernetes-friendly probe endpoints:
 
-### `game-simulation`
+### `simulation`
 
 - `GET /healthz`
 - `GET /readyz`
 
 Both return `200 OK` when the process is available.
 
-### `stat-api-server`
+### `stats`
 
 - `GET /healthz`
 - `GET /readyz`
@@ -154,8 +154,8 @@ Current GitHub Actions coverage includes:
   - `go vet`
   - `golangci-lint`
 - Per-service coverage reporting
-  - `game-simulation`
-  - `stat-api-server`
+  - `simulation`
+  - `stats`
   - `frontend`
 - Frontend build validation
   - `vite build`
@@ -164,18 +164,18 @@ The project reports per-service coverage instead of relying on a single overall 
 
 ## Running Coverage Locally
 
-### `game-simulation`
+### `simulation`
 
 ```sh
-cd game-simulation
+cd simulation
 go test ./... -coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
 
-### `stat-api-server`
+### `stats`
 
 ```sh
-cd stat-api-server
+cd stats
 go test ./... -coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
@@ -192,5 +192,7 @@ The frontend coverage summary is written to `frontend/coverage/coverage-summary.
 ## Repository Pointers
 
 - frontend app: [frontend/README.md](frontend/README.md)
+- auth service: [auth/README.md](auth/README.md)
+- architecture decisions: [docs/adr/README.md](docs/adr/README.md)
 - local env template: [.env.example](.env.example)
 - contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -9,8 +9,8 @@ on:
       - ".env.example"
       - "gateway/**"
       - "frontend/**"
-      - "game-simulation/**"
-      - "stat-api-server/**"
+      - "simulation/**"
+      - "stats/**"
   pull_request:
     branches: [ "main" ]
     paths:
@@ -19,8 +19,8 @@ on:
       - ".env.example"
       - "gateway/**"
       - "frontend/**"
-      - "game-simulation/**"
-      - "stat-api-server/**"
+      - "simulation/**"
+      - "stats/**"
   workflow_dispatch:
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
 
       - name: Render default Compose config
         run: |
-          STAT_API_SERVER_DATABASE_URL=postgres://myuser:change-me@db/mydatabase?sslmode=disable \
+          STATS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           docker compose config --format json > compose-default.json
 
       - name: Verify default frontend API entrypoint and port mappings
@@ -50,12 +50,12 @@ jobs:
 
           services = compose["services"]
           gateway_service = services["gateway"]
-          db_service = services["db"]
+          db_service = services["postgres"]
           pgadmin_service = services["pgadmin"]
-          stat_service = services["stat-api-server"]
+          stat_service = services["stats"]
           gateway_port = gateway_service["ports"][0]
-          stat_port = services["stat-api-server"]["ports"][0]
-          simulation_port = services["game-simulation"]["ports"][0]
+          stat_port = services["stats"]["ports"][0]
+          simulation_port = services["simulation"]["ports"][0]
 
           assert gateway_service["build"]["context"].endswith("lineup-lab")
           assert gateway_service["build"]["dockerfile"] == "gateway/Dockerfile"
@@ -64,7 +64,7 @@ jobs:
           assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
           assert pgadmin_service["environment"]["PGADMIN_DEFAULT_EMAIL"] == "admin@admin.com"
           assert pgadmin_service["environment"]["PGADMIN_DEFAULT_PASSWORD"] == "change-me"
-          assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@db/mydatabase?sslmode=disable"
+          assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@postgres/mydatabase?sslmode=disable"
           assert gateway_port["published"] == "8080"
           assert gateway_port["target"] == 80
           assert stat_port["published"] == "8082"
@@ -75,11 +75,11 @@ jobs:
 
       - name: Render Compose config with overridden service ports
         run: |
-          STAT_API_SERVER_DATABASE_URL=postgres://myuser:change-me@db/mydatabase?sslmode=disable \
-          STAT_API_SERVER_PORT=18080 \
-          STAT_API_SERVER_HOST_PORT=19082 \
-          GAME_SIMULATION_PORT=18081 \
-          GAME_SIMULATION_HOST_PORT=19081 \
+          STATS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
+          STATS_PORT=18080 \
+          STATS_HOST_PORT=19082 \
+          SIMULATION_PORT=18081 \
+          SIMULATION_HOST_PORT=19081 \
           docker compose config --format json > compose-overrides.json
 
       - name: Verify overridden internal service ports and frontend entrypoint
@@ -92,10 +92,10 @@ jobs:
 
           services = compose["services"]
           gateway_service = services["gateway"]
-          db_service = services["db"]
+          db_service = services["postgres"]
           pgadmin_service = services["pgadmin"]
-          stat_service = services["stat-api-server"]
-          simulation_service = services["game-simulation"]
+          stat_service = services["stats"]
+          simulation_service = services["simulation"]
           gateway_port = gateway_service["ports"][0]
           stat_port = stat_service["ports"][0]
           simulation_port = simulation_service["ports"][0]
@@ -110,7 +110,7 @@ jobs:
           assert gateway_port["published"] == "8080"
           assert gateway_port["target"] == 80
           assert stat_service["environment"]["PORT"] == "18080"
-          assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@db/mydatabase?sslmode=disable"
+          assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@postgres/mydatabase?sslmode=disable"
           assert stat_port["published"] == "19082"
           assert stat_port["target"] == 18080
           assert simulation_service["environment"]["PORT"] == "18081"
@@ -125,7 +125,7 @@ jobs:
             exit 1
           fi
 
-          grep -F "STAT_API_SERVER_DATABASE_URL must be set" /tmp/compose-missing-env.log
+          grep -F "STATS_DATABASE_URL must be set" /tmp/compose-missing-env.log
 
   gateway-smoke-test:
     runs-on: ubuntu-latest
@@ -135,8 +135,8 @@ jobs:
       POSTGRES_PASSWORD: change-me
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: change-me
-      STAT_API_SERVER_DATABASE_URL: postgres://myuser:change-me@db/mydatabase?sslmode=disable
-      GAME_SIMULATION_DEBUG: "1"
+      STATS_DATABASE_URL: postgres://myuser:change-me@postgres/mydatabase?sslmode=disable
+      SIMULATION_DEBUG: "1"
     steps:
       - uses: actions/checkout@v5
 
