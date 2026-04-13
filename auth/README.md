@@ -12,6 +12,7 @@ Ownership:
 - `auth` owns the `users` and `sessions` tables
 - other services should not write auth-domain tables directly
 - the shared Postgres instance does not change that logical ownership model
+- auth-owned schema changes should follow the shared migration strategy in [docs/adr/0003-shared-postgres-migration-strategy.md](../docs/adr/0003-shared-postgres-migration-strategy.md)
 
 See the architecture decision record:
 - [docs/adr/0002-auth-owns-users-and-sessions.md](../docs/adr/0002-auth-owns-users-and-sessions.md)

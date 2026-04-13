@@ -112,6 +112,7 @@ Notes:
 - `docker-compose.yml` requires several env vars explicitly and fails fast if they are missing
 - the browser only talks to the gateway origin in Docker Compose; the gateway routes `/api/*` to the internal backend services
 - the frontend source lives in `frontend/`, but the runtime entrypoint is the `gateway` service
+- shared Postgres schema evolution is defined in [docs/adr/0003-shared-postgres-migration-strategy.md](docs/adr/0003-shared-postgres-migration-strategy.md), with Atlas planned as the repo-wide migration workflow
 
 ## Health And Readiness Endpoints
 
@@ -193,6 +194,7 @@ The frontend coverage summary is written to `frontend/coverage/coverage-summary.
 
 - frontend app: [frontend/README.md](frontend/README.md)
 - auth service: [auth/README.md](auth/README.md)
+- postgres bootstrap and migration notes: [postgres/README.md](postgres/README.md)
 - architecture decisions: [docs/adr/README.md](docs/adr/README.md)
 - auth session strategy: [docs/auth-session-strategy.md](docs/auth-session-strategy.md)
 - local env template: [.env.example](.env.example)

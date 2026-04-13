@@ -13,6 +13,7 @@ Current ADRs:
 
 - [0001-single-public-api-entrypoint.md](0001-single-public-api-entrypoint.md)
 - [0002-auth-owns-users-and-sessions.md](0002-auth-owns-users-and-sessions.md)
+- [0003-shared-postgres-migration-strategy.md](0003-shared-postgres-migration-strategy.md)
 
 Suggested format:
 
