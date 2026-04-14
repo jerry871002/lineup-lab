@@ -6,6 +6,7 @@ on:
     paths:
       - "auth/**"
       - "frontend/**"
+      - "postgres/**"
       - "simulation/**"
       - "stats/**"
       - ".github/workflows/test.yml"
@@ -14,12 +15,44 @@ on:
     paths:
       - "auth/**"
       - "frontend/**"
+      - "postgres/**"
       - "simulation/**"
       - "stats/**"
       - ".github/workflows/test.yml"
   workflow_dispatch:
 
 jobs:
+  postgres-schema-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_DB: lineup_lab_test
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lineup_lab_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Verify users.updated_at trigger
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: bash postgres/tests/users_updated_at_trigger.sh
+
   auth-tests:
     runs-on: ubuntu-latest
 
