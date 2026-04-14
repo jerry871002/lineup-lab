@@ -26,7 +26,7 @@ def test_auth_routes_are_reserved() -> None:
         json={
             "username": "testuser",
             "email": "test@example.com",
-            "password": "supersecret",
+            "password": "correct horse battery",
         },
     )
 
@@ -34,12 +34,25 @@ def test_auth_routes_are_reserved() -> None:
     assert response.json() == {"detail": "registration is not implemented yet"}
 
 
+def test_register_route_rejects_short_passwords_before_handler() -> None:
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": "testuser",
+            "email": "test@example.com",
+            "password": "short pass",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_login_route_is_reserved() -> None:
     response = client.post(
         "/auth/login",
         json={
             "username_or_email": "testuser",
-            "password": "supersecret",
+            "password": "correct horse battery",
         },
     )
 

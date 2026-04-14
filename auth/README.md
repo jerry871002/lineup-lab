@@ -6,6 +6,9 @@ Current scope:
 - health and readiness endpoints
 - database configuration and connectivity checks
 - SQLAlchemy models for the `users` and `sessions` tables
+- Argon2-based password hashing helpers and credential validation
+  - configurable hash cost settings for auth environments
+  - length-based password validation aligned with NIST/OWASP-style guidance
 - placeholder auth and user routes that reserve the public API shape
 
 Ownership:
