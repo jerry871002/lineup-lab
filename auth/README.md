@@ -16,6 +16,7 @@ Ownership:
 - other services should not write auth-domain tables directly
 - the shared Postgres instance does not change that logical ownership model
 - auth-owned schema changes should follow the shared migration strategy in [docs/adr/0003-shared-postgres-migration-strategy.md](../docs/adr/0003-shared-postgres-migration-strategy.md)
+- `users.updated_at` is maintained both by the ORM mapping and by a Postgres trigger so non-ORM writes stay consistent too
 
 See the architecture decision record:
 - [docs/adr/0002-auth-owns-users-and-sessions.md](../docs/adr/0002-auth-owns-users-and-sessions.md)
