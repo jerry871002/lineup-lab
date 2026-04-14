@@ -13,6 +13,11 @@ class RegistrationRequest(BaseModel):
     def validate_username_field(cls, value: str) -> str:
         return validate_username(value)
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email_field(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
+
     @field_validator("password")
     @classmethod
     def validate_password_field(cls, value: str) -> str:
@@ -31,3 +36,9 @@ class LoginRequest(BaseModel):
 
 class APIMessage(BaseModel):
     detail: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
