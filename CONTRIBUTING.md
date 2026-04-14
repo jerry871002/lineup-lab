@@ -115,3 +115,4 @@ Before merging, check:
 - Avoid direct commits to `main`.
 - Keep the project runnable locally while improving the Kubernetes path.
 - Favor simple, explainable architecture choices over premature platform complexity.
+- Do not add `from __future__ import annotations` in new or edited files unless a maintainer explicitly asks for it.
