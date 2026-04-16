@@ -9,7 +9,8 @@ Current scope:
 - Argon2-based password hashing helpers and credential validation
   - configurable hash cost settings for auth environments
   - length-based password validation aligned with NIST/OWASP-style guidance
-- placeholder auth and user routes that reserve the public API shape
+- session-backed auth routes for registration, login, logout, and current-user lookup
+- secure cookie helpers for session and CSRF handling
 
 Ownership:
 - `auth` owns the `users` and `sessions` tables

@@ -7,7 +7,7 @@ from app.schemas import LoginRequest, RegistrationRequest
 def test_registration_request_accepts_valid_credentials() -> None:
     request = RegistrationRequest(
         username=" Test_User ",
-        email="test@example.com",
+        email="Test@Example.com",
         password="correct horse battery",
     )
 
