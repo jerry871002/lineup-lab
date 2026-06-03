@@ -50,6 +50,22 @@ Why these defaults:
 - `Secure=true` should be required in HTTPS deployments
 - host-only cookies keep the scope tight unless cross-subdomain sharing is truly needed
 
+## XSS Assumptions
+
+The session and CSRF model assumes the browser-facing app is also hardened
+against XSS. The session cookie is `HttpOnly`, but the CSRF cookie is readable by
+frontend JavaScript by design. If attacker-controlled JavaScript runs in the
+Lineup Lab origin, it may be able to read the CSRF cookie and make authenticated
+requests through the trusted frontend path.
+
+Baseline XSS mitigations are tracked in
+[docs/xss-hardening.md](xss-hardening.md). In short:
+
+- the gateway should send a conservative CSP and related browser security
+  headers
+- the frontend should avoid rendering untrusted HTML
+- future rich text or third-party script use must revisit the CSP explicitly
+
 ## CSRF Model
 
 CSRF matters because browsers send cookies automatically. Without an extra check, a third-party site may be able to trigger a state-changing request that still carries the victim's valid session cookie.
@@ -257,8 +273,9 @@ So the gateway should help establish identity, but `stat-api-server` should own 
 
 Current state:
 
-- `stat-api-server` and `game-simulation` do not enforce auth
-- `auth` routes are placeholders
+- `stats` and `simulation` do not enforce auth
+- `auth` implements session-backed registration, login, logout, and current-user
+  lookup
 
 Target state under epic `#18`:
 

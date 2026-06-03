@@ -197,5 +197,6 @@ The frontend coverage summary is written to `frontend/coverage/coverage-summary.
 - postgres bootstrap and migration notes: [postgres/README.md](postgres/README.md)
 - architecture decisions: [docs/adr/README.md](docs/adr/README.md)
 - auth session strategy: [docs/auth-session-strategy.md](docs/auth-session-strategy.md)
+- XSS hardening notes: [docs/xss-hardening.md](docs/xss-hardening.md)
 - local env template: [.env.example](.env.example)
 - contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
