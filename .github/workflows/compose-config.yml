@@ -7,6 +7,7 @@ on:
       - ".github/workflows/compose-config.yml"
       - "docker-compose.yml"
       - ".env.example"
+      - "auth/**"
       - "gateway/**"
       - "frontend/**"
       - "simulation/**"
@@ -17,6 +18,7 @@ on:
       - ".github/workflows/compose-config.yml"
       - "docker-compose.yml"
       - ".env.example"
+      - "auth/**"
       - "gateway/**"
       - "frontend/**"
       - "simulation/**"
@@ -32,11 +34,13 @@ jobs:
       POSTGRES_PASSWORD: change-me
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: change-me
+      SESSION_HMAC_SECRET: test-session-secret
     steps:
       - uses: actions/checkout@v5
 
       - name: Render default Compose config
         run: |
+          AUTH_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           STATS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           docker compose config --format json > compose-default.json
 
@@ -52,6 +56,7 @@ jobs:
           gateway_service = services["gateway"]
           db_service = services["postgres"]
           pgadmin_service = services["pgadmin"]
+          auth_service = services["auth"]
           stat_service = services["stats"]
           gateway_port = gateway_service["ports"][0]
           stat_port = services["stats"]["ports"][0]
@@ -59,11 +64,14 @@ jobs:
 
           assert gateway_service["build"]["context"].endswith("lineup-lab")
           assert gateway_service["build"]["dockerfile"] == "gateway/Dockerfile"
+          assert gateway_service["environment"]["AUTH_PORT"] == "8000"
           assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
           assert db_service["environment"]["POSTGRES_USER"] == "myuser"
           assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
           assert pgadmin_service["environment"]["PGADMIN_DEFAULT_EMAIL"] == "admin@admin.com"
           assert pgadmin_service["environment"]["PGADMIN_DEFAULT_PASSWORD"] == "change-me"
+          assert auth_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@postgres/mydatabase?sslmode=disable"
+          assert auth_service["environment"]["SESSION_HMAC_SECRET"] == "test-session-secret"
           assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@postgres/mydatabase?sslmode=disable"
           assert gateway_port["published"] == "8080"
           assert gateway_port["target"] == 80
@@ -75,6 +83,8 @@ jobs:
 
       - name: Render Compose config with overridden service ports
         run: |
+          AUTH_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
+          AUTH_PORT=18000 \
           STATS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           STATS_PORT=18080 \
           STATS_HOST_PORT=19082 \
@@ -94,6 +104,7 @@ jobs:
           gateway_service = services["gateway"]
           db_service = services["postgres"]
           pgadmin_service = services["pgadmin"]
+          auth_service = services["auth"]
           stat_service = services["stats"]
           simulation_service = services["simulation"]
           gateway_port = gateway_service["ports"][0]
@@ -102,6 +113,7 @@ jobs:
 
           assert gateway_service["build"]["context"].endswith("lineup-lab")
           assert gateway_service["build"]["dockerfile"] == "gateway/Dockerfile"
+          assert gateway_service["environment"]["AUTH_PORT"] == "18000"
           assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
           assert db_service["environment"]["POSTGRES_USER"] == "myuser"
           assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
@@ -109,6 +121,8 @@ jobs:
           assert pgadmin_service["environment"]["PGADMIN_DEFAULT_PASSWORD"] == "change-me"
           assert gateway_port["published"] == "8080"
           assert gateway_port["target"] == 80
+          assert auth_service["environment"]["PORT"] == "18000"
+          assert auth_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@postgres/mydatabase?sslmode=disable"
           assert stat_service["environment"]["PORT"] == "18080"
           assert stat_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@postgres/mydatabase?sslmode=disable"
           assert stat_port["published"] == "19082"
@@ -120,7 +134,8 @@ jobs:
 
       - name: Verify missing required env fails fast
         run: |
-          if docker compose config >/tmp/compose-missing-env.log 2>&1; then
+          if AUTH_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
+            docker compose config >/tmp/compose-missing-env.log 2>&1; then
             echo "docker compose config unexpectedly succeeded without required env vars"
             exit 1
           fi
@@ -136,6 +151,8 @@ jobs:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: change-me
       STATS_DATABASE_URL: postgres://myuser:change-me@postgres/mydatabase?sslmode=disable
+      AUTH_DATABASE_URL: postgres://myuser:change-me@postgres/mydatabase?sslmode=disable
+      SESSION_HMAC_SECRET: test-session-secret
       SIMULATION_DEBUG: "1"
     steps:
       - uses: actions/checkout@v5
@@ -195,6 +212,11 @@ jobs:
             echo "Unknown API path returned frontend HTML"
             exit 1
           fi
+
+      - name: Verify unauthenticated auth route is proxied
+        run: |
+          status="$(curl -s -o users-me.json -w '%{http_code}' http://localhost:8080/api/users/me)"
+          test "$status" = "401"
 
       - name: Tear down Docker Compose stack
         if: always()
