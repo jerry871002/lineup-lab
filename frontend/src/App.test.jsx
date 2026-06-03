@@ -1,3 +1,4 @@
+import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -25,8 +26,19 @@ vi.mock('react-dnd-html5-backend', () => ({
 
 const createJSONResponse = (data) =>
   Promise.resolve({
+    ok: true,
+    status: 200,
     json: () => Promise.resolve(data),
   });
+
+const createErrorResponse = (status, data) =>
+  Promise.resolve({
+    ok: false,
+    status,
+    json: () => Promise.resolve(data),
+  });
+
+const currentUser = { id: 1, username: 'testuser', email: 'test@example.com' };
 
 describe('App', () => {
   beforeEach(() => {
@@ -36,11 +48,12 @@ describe('App', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    document.cookie = 'lineup_lab_csrf=; Max-Age=0; path=/';
   });
 
   it('renders the app header', async () => {
     global.fetch = vi.fn(() =>
-      createJSONResponse([])
+      createErrorResponse(401, { detail: 'authentication required' })
     );
 
     render(<App />);
@@ -49,25 +62,417 @@ describe('App', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
   });
 
-  it('loads teams on mount', async () => {
+  it('shows the login form when there is no active session', async () => {
     global.fetch = vi.fn(() =>
-      createJSONResponse([
-        { name: 'Yankees', year: 2024 },
-        { name: 'Mets', year: 2023 },
-      ])
+      createErrorResponse(401, { detail: 'authentication required' })
     );
+
+    render(<App />);
+
+    expect(await screen.findByRole('tab', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.queryByText('Roster')).not.toBeInTheDocument();
+  });
+
+  it('logs in and loads protected workspace data', async () => {
+    const user = userEvent.setup();
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createErrorResponse(401, { detail: 'authentication required' })
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse([
+          { name: 'Yankees', year: 2024 },
+        ])
+      );
+
+    render(<App />);
+
+    await user.type(await screen.findByLabelText('Username or email'), 'testuser');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: 'Log in' }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        2,
+        '/api/auth/login',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'same-origin',
+        })
+      );
+    });
+    expect(await screen.findByText(/Signed in as/)).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Yankees (2024)' })).toBeInTheDocument();
+  });
+
+  it('shows readable validation errors from the auth API', async () => {
+    const user = userEvent.setup();
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createErrorResponse(401, { detail: 'authentication required' })
+      )
+      .mockImplementationOnce(() =>
+        createErrorResponse(422, {
+          detail: [
+            { msg: 'Password must be at least 15 characters long' },
+            { msg: 'Username may only contain letters, numbers, and underscores' },
+          ],
+        })
+      );
+
+    render(<App />);
+
+    await user.type(await screen.findByLabelText('Username or email'), 'bad username');
+    await user.type(screen.getByLabelText('Password'), 'short');
+    await user.click(screen.getByRole('button', { name: 'Log in' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Password must be at least 15 characters long Username may only contain letters, numbers, and underscores'
+    );
+  });
+
+  it('prevents duplicate auth submissions while a request is in flight', async () => {
+    const user = userEvent.setup();
+    let resolveLogin;
+    const loginPromise = new Promise(resolve => {
+      resolveLogin = resolve;
+    });
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createErrorResponse(401, { detail: 'authentication required' })
+      )
+      .mockImplementationOnce(() =>
+        loginPromise
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse([])
+      );
+
+    render(<App />);
+
+    await user.type(await screen.findByLabelText('Username or email'), 'testuser');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery');
+    const submitButton = screen.getByRole('button', { name: 'Log in' });
+    await user.click(submitButton);
+    await user.click(screen.getByRole('button', { name: 'Submitting...' }));
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    resolveLogin(createJSONResponse(currentUser));
+    expect(await screen.findByText(/Signed in as/)).toBeInTheDocument();
+  });
+
+  it('registers a new user and signs in', async () => {
+    const user = userEvent.setup();
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createErrorResponse(401, { detail: 'authentication required' })
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse([])
+      );
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('tab', { name: 'Register' }));
+    await user.type(screen.getByLabelText('Username'), 'testuser');
+    await user.type(screen.getByLabelText('Email'), 'test@example.com');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        2,
+        '/api/auth/register',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'same-origin',
+        })
+      );
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        3,
+        '/api/auth/login',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'same-origin',
+        })
+      );
+    });
+    expect(await screen.findByText(/Signed in as/)).toBeInTheDocument();
+  });
+
+  it('logs out with the CSRF token and hides protected content', async () => {
+    const user = userEvent.setup();
+    document.cookie = 'lineup_lab_csrf=csrf-token; path=/';
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse([])
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse({ detail: 'logout succeeded' })
+      );
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        3,
+        '/api/auth/logout',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'X-CSRF-Token': 'csrf-token',
+          },
+        })
+      );
+    });
+    expect(await screen.findByText('You have been logged out.')).toBeInTheDocument();
+    expect(screen.queryByText('Roster')).not.toBeInTheDocument();
+  });
+
+  it('unquotes the CSRF cookie emitted by the auth backend', async () => {
+    const user = userEvent.setup();
+    const token = '550e8400-e29b-41d4-a716-446655440000:nonce:signature=';
+    document.cookie = `lineup_lab_csrf="${token}"; path=/`;
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => createJSONResponse(currentUser))
+      .mockImplementationOnce(() => createJSONResponse([]))
+      .mockImplementationOnce(() => createJSONResponse({ detail: 'logout succeeded' }));
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+    expect(global.fetch.mock.calls[2][1].headers['X-CSRF-Token']).toBe(token);
+    expect(await screen.findByText('You have been logged out.')).toBeInTheDocument();
+  });
+
+  it('leaves an expired session when logout returns 401', async () => {
+    const user = userEvent.setup();
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => createJSONResponse(currentUser))
+      .mockImplementationOnce(() => createJSONResponse([]))
+      .mockImplementationOnce(() => createErrorResponse(401, { detail: 'authentication required' }));
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.queryByText('Roster')).not.toBeInTheDocument();
+  });
+
+  it('leaves a session whose cookies expired before logout', async () => {
+    const user = userEvent.setup();
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => createJSONResponse(currentUser))
+      .mockImplementationOnce(() => createJSONResponse([]))
+      .mockImplementationOnce(() => createErrorResponse(403, { detail: 'csrf token is invalid' }))
+      .mockImplementationOnce(() => createErrorResponse(401, { detail: 'authentication required' }));
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.queryByText('Roster')).not.toBeInTheDocument();
+  });
+
+  it('keeps an active session when logout fails CSRF validation', async () => {
+    const user = userEvent.setup();
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => createJSONResponse(currentUser))
+      .mockImplementationOnce(() => createJSONResponse([]))
+      .mockImplementationOnce(() => createErrorResponse(403, { detail: 'csrf token is invalid' }))
+      .mockImplementationOnce(() => createJSONResponse(currentUser));
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('csrf token is invalid');
+    expect(screen.getByText(/Signed in as/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log out' })).toBeEnabled();
+  });
+
+  it('sends only one logout request while it is pending', async () => {
+    const user = userEvent.setup();
+    let completeLogout;
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => createJSONResponse(currentUser))
+      .mockImplementationOnce(() => createJSONResponse([]))
+      .mockImplementationOnce(() => new Promise(resolve => { completeLogout = resolve; }));
+    render(<App />);
+    await user.dblClick(await screen.findByRole('button', { name: 'Log out' }));
+    expect(screen.getByRole('button', { name: 'Logging out...' })).toBeDisabled();
+    expect(global.fetch.mock.calls.filter(([url]) => url === '/api/auth/logout')).toHaveLength(1);
+    await act(async () => completeLogout(await createJSONResponse({ detail: 'logout succeeded' })));
+    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument();
+  });
+
+  it('ignores an obsolete StrictMode session response after login', async () => {
+    const user = userEvent.setup();
+    let completeOldSession;
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { completeOldSession = resolve; }))
+      .mockImplementationOnce(() => createErrorResponse(401, { detail: 'authentication required' }))
+      .mockImplementationOnce(() => createJSONResponse(currentUser))
+      .mockImplementationOnce(() => createJSONResponse([]));
+    render(<React.StrictMode><App /></React.StrictMode>);
+    await user.type(await screen.findByLabelText('Username or email'), 'testuser');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: 'Log in' }));
+    expect(await screen.findByText(/Signed in as/)).toBeInTheDocument();
+    await act(async () => completeOldSession(await createErrorResponse(401, { detail: 'authentication required' })));
+    expect(screen.getByText(/Signed in as/)).toBeInTheDocument();
+  });
+
+  it.each(['teams', 'batting', 'simulate'])('ignores a pending %s response after logout and another login', async (endpoint) => {
+    const user = userEvent.setup();
+    let completeOldRequest;
+    let firstSession = true;
+    global.fetch = vi.fn(url => {
+      if (url === '/api/users/me') return createJSONResponse(currentUser);
+      if (url === '/api/auth/logout') {
+        firstSession = false;
+        return createJSONResponse({ detail: 'logout succeeded' });
+      }
+      if (url === '/api/auth/login') return createJSONResponse({ ...currentUser, id: 2, username: 'anotheruser' });
+      if (firstSession && (url === `/api/${endpoint}` || endpoint === 'batting' && url.startsWith('/api/batting?'))) {
+        return new Promise(resolve => { completeOldRequest = resolve; });
+      }
+      if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }]);
+      return createJSONResponse([]);
+    });
+    render(<App />);
+    if (endpoint === 'batting') {
+      await screen.findByRole('option', { name: 'Yankees (2024)' });
+      await user.selectOptions(screen.getByRole('combobox'), 'Yankees+2024');
+    }
+    if (endpoint === 'simulate') await user.click(await screen.findByRole('button', { name: 'Simulate' }));
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+    await user.type(await screen.findByLabelText('Username or email'), 'anotheruser');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: 'Log in' }));
+    await screen.findByRole('option', { name: 'Yankees (2024)' });
+    const staleData = endpoint === 'teams' ? [{ name: 'Stale team', year: 2024 }]
+      : endpoint === 'batting' ? [{ name: 'Stale player', at_bat: 100, hit: 30 }]
+      : { average_score: 99, average_hits: 99 };
+    await act(async () => completeOldRequest(await createJSONResponse(staleData)));
+    expect(screen.queryByText(/Stale/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Average Score:/)).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Yankees (2024)' })).toBeInTheDocument();
+  });
+
+  it('falls back to the raw CSRF cookie value when decoding fails', async () => {
+    const user = userEvent.setup();
+    document.cookie = 'lineup_lab_csrf=raw%token; path=/';
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse([])
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse({ detail: 'logout succeeded' })
+      );
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        3,
+        '/api/auth/logout',
+        expect.objectContaining({
+          headers: {
+            'X-CSRF-Token': 'raw%token',
+          },
+        })
+      );
+    });
+  });
+
+  it('shows a network error when logout cannot reach the auth API', async () => {
+    const user = userEvent.setup();
+    document.cookie = 'lineup_lab_csrf=csrf-token; path=/';
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse([])
+      )
+      .mockImplementationOnce(() =>
+        Promise.reject(new Error('network down'))
+      );
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log out' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Network error. Please try again.');
+    expect(screen.getByText(/Signed in as/)).toBeInTheDocument();
+  });
+
+  it('loads teams on mount', async () => {
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse([
+          { name: 'Yankees', year: 2024 },
+          { name: 'Mets', year: 2023 },
+        ])
+      );
 
     render(<App />);
 
     expect(await screen.findByRole('option', { name: 'Yankees (2024)' })).toBeInTheDocument();
     expect(await screen.findByRole('option', { name: 'Mets (2023)' })).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledWith('/api/teams');
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/teams'
+    );
+  });
+
+  it('keeps teams empty when the teams API returns an error object', async () => {
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
+      .mockImplementationOnce(() =>
+        createJSONResponse({ detail: 'unexpected response' })
+      );
+
+    render(<App />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Yankees/ })).not.toBeInTheDocument();
   });
 
   it('loads roster data after selecting a team', async () => {
     const user = userEvent.setup();
     global.fetch = vi
       .fn()
+      .mockImplementationOnce(() =>
+        createJSONResponse(currentUser)
+      )
       .mockImplementationOnce(() =>
         createJSONResponse([
           { name: 'Yankees', year: 2024 },
@@ -109,7 +514,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenNthCalledWith(
-        2,
+        3,
         '/api/batting?team=Yankees&year=2024'
       );
     });
@@ -137,6 +542,7 @@ describe('App', () => {
       year: 2024,
     }));
     global.fetch = vi.fn()
+      .mockImplementationOnce(() => createJSONResponse(currentUser))
       .mockImplementationOnce(() => createJSONResponse([{ name: 'Yankees', year: 2024 }]))
       .mockImplementationOnce(() => createJSONResponse(roster))
       .mockImplementationOnce(() => createJSONResponse({ average_score: 4.5, average_hits: 9.25 }));
@@ -160,7 +566,7 @@ describe('App', () => {
     });
     await user.click(screen.getByRole('button', { name: 'Simulate' }));
 
-    const [url, options] = global.fetch.mock.calls[2];
+    const [url, options] = global.fetch.mock.calls[3];
     expect(url).toBe('/api/simulate');
     expect(options.method).toBe('POST');
     expect(options.headers['Content-Type']).toBe('application/json');

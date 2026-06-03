@@ -114,6 +114,41 @@ def test_login_route_sets_auth_and_csrf_cookies(monkeypatch) -> None:
     assert main.settings.csrf_cookie_name in response.cookies
 
 
+def test_logout_after_login_uses_unquoted_csrf_cookie(monkeypatch) -> None:
+    session_id = uuid4()
+
+    def fake_login_user(_db, _payload, _user_agent, _client_ip):
+        return (
+            SimpleNamespace(id=1, username="testuser", email="test@example.com"),
+            SimpleNamespace(id=session_id),
+        )
+
+    def fake_revoke_session(_db, actual_session_id):
+        assert actual_session_id == session_id
+        return SimpleNamespace(id=actual_session_id)
+
+    monkeypatch.setattr(main, "login_user", fake_login_user)
+    monkeypatch.setattr(main, "revoke_session", fake_revoke_session)
+    local_client = TestClient(main.app)
+    login_response = local_client.post(
+        "/auth/login",
+        json={"username_or_email": "testuser", "password": "correct horse battery"},
+    )
+    assert login_response.status_code == 200
+    csrf_header = next(
+        value for value in login_response.headers.get_list("set-cookie")
+        if value.startswith(f"{main.settings.csrf_cookie_name}=")
+    )
+    wire_value = csrf_header.split(";", 1)[0].split("=", 1)[1]
+    assert wire_value.startswith('"') and wire_value.endswith('"')
+
+    rejected = local_client.post("/auth/logout", headers={"X-CSRF-Token": wire_value})
+    assert rejected.status_code == 403
+    accepted = local_client.post("/auth/logout", headers={"X-CSRF-Token": wire_value[1:-1]})
+    assert accepted.status_code == 200
+    assert accepted.json() == {"detail": "logout succeeded"}
+
+
 def test_login_route_rejects_invalid_credentials(monkeypatch) -> None:
     def fake_login_user(_db, _payload, _user_agent, _client_ip):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid username/email or password")
