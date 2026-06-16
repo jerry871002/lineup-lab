@@ -4,13 +4,27 @@ services:
       context: .
       dockerfile: gateway/Dockerfile
     environment:
+      AUTH_PORT: ${AUTH_PORT:-8000}
       STATS_PORT: ${STATS_PORT:-80}
       SIMULATION_PORT: ${SIMULATION_PORT:-80}
     ports:
       - 8080:80
     depends_on:
+      - auth
       - stats
       - simulation
+
+  auth:
+    build:
+      context: .
+      dockerfile: auth/Dockerfile
+    environment:
+      PORT: ${AUTH_PORT:-8000}
+      DATABASE_URL: ${AUTH_DATABASE_URL:?AUTH_DATABASE_URL must be set}
+      SESSION_HMAC_SECRET: ${SESSION_HMAC_SECRET:?SESSION_HMAC_SECRET must be set}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+    depends_on:
+      - postgres
 
   simulation:
     build: ./simulation
