@@ -1,0 +1,39 @@
+name: Validate saved lineups service
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["lineups/**", "postgres/**", ".github/workflows/lineups.yml"]
+  push:
+    branches: [main]
+    paths: ["lineups/**", "postgres/**", ".github/workflows/lineups.yml"]
+  workflow_dispatch:
+
+jobs:
+  lineups-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: lineups/go.sum
+      - name: Verify formatting, vet, and PostgreSQL ownership tests
+        working-directory: lineups
+        env:
+          LINEUPS_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test -race ./...
