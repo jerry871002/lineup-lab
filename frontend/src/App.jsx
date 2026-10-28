@@ -84,12 +84,23 @@ const App = () => {
   };
 
   const simulateLineup = async () => {
+    const batters = lineup.map(player => player ? {
+      name: player.name,
+      at_bat: player.at_bat,
+      hit: player.hit,
+      double: player.double,
+      triple: player.triple,
+      home_run: player.home_run,
+      ball_on_base: player.ball_on_base,
+      hit_by_pitch: player.hit_by_pitch,
+    } : null);
+
     const response = await fetch(`${apiBasePath}/simulate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(lineup),
+      body: JSON.stringify(batters),
     });
     const result = await response.json();
     console.log(result);
