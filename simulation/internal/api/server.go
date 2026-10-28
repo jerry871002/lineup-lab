@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"runtime"
@@ -80,9 +79,9 @@ func (s *Server) optimizeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var roster []simulation.Batter
-	if err := json.NewDecoder(r.Body).Decode(&roster); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	roster, err := decodeAndValidateRoster(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Println(err)
 		return
 	}

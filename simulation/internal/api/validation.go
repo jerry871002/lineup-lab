@@ -30,6 +30,28 @@ func decodeAndValidateLineup(r *http.Request) ([]simulation.Batter, error) {
 	return lineup, nil
 }
 
+func decodeAndValidateRoster(r *http.Request) ([]simulation.Batter, error) {
+	var roster []simulation.Batter
+	if err := decodeStrictJSON(r.Body, &roster); err != nil {
+		return nil, fmt.Errorf("invalid request body: %w", err)
+	}
+
+	if len(roster) < lineupSize {
+		return nil, fmt.Errorf("roster must have at least %d batters", lineupSize)
+	}
+
+	noOutBatters, err := validateBatters(roster)
+	if err != nil {
+		return nil, err
+	}
+	// Any nine roster members may be sampled into a lineup by the optimizer.
+	if noOutBatters >= lineupSize {
+		return nil, fmt.Errorf("roster must have fewer than %d batters with zero out probability", lineupSize)
+	}
+
+	return roster, nil
+}
+
 func decodeStrictJSON(body io.Reader, dst any) error {
 	decoder := json.NewDecoder(body)
 	decoder.DisallowUnknownFields()
@@ -54,29 +76,37 @@ func validateLineup(lineup []simulation.Batter) error {
 		return fmt.Errorf("lineup must have %d batters", lineupSize)
 	}
 
-	seenNames := make(map[string]int, len(lineup))
-	lineupCanRecordOut := false
-	for i, batter := range lineup {
-		if err := validateBatter(batter, i); err != nil {
-			return err
-		}
-
-		normalizedName := strings.ToLower(strings.TrimSpace(batter.Name))
-		if previousIndex, exists := seenNames[normalizedName]; exists {
-			return fmt.Errorf("batter %d duplicates batter %d name %q", i, previousIndex, strings.TrimSpace(batter.Name))
-		}
-
-		seenNames[normalizedName] = i
-		if batter.CanRecordOut() {
-			lineupCanRecordOut = true
-		}
+	noOutBatters, err := validateBatters(lineup)
+	if err != nil {
+		return err
 	}
-
-	if !lineupCanRecordOut {
+	if noOutBatters == lineupSize {
 		return errors.New("lineup must contain at least one batter with non-zero out probability")
 	}
 
 	return nil
+}
+
+func validateBatters(batters []simulation.Batter) (int, error) {
+	seenNames := make(map[string]int, len(batters))
+	noOutBatters := 0
+	for i, batter := range batters {
+		if err := validateBatter(batter, i); err != nil {
+			return 0, err
+		}
+
+		normalizedName := strings.ToLower(strings.TrimSpace(batter.Name))
+		if previousIndex, exists := seenNames[normalizedName]; exists {
+			return 0, fmt.Errorf("batter %d duplicates batter %d name %q", i, previousIndex, strings.TrimSpace(batter.Name))
+		}
+
+		seenNames[normalizedName] = i
+		if !batter.CanRecordOut() {
+			noOutBatters++
+		}
+	}
+
+	return noOutBatters, nil
 }
 
 func validateBatter(batter simulation.Batter, index int) error {
