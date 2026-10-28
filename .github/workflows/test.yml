@@ -53,6 +53,15 @@ jobs:
           PGDATABASE: postgres
         run: bash postgres/tests/users_updated_at_trigger.sh
 
+      - name: Verify demo seed and repeat imports
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: bash postgres/tests/demo_seed.sh
+
   auth-tests:
     runs-on: ubuntu-latest
 

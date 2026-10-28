@@ -78,6 +78,11 @@ This starts the full local environment with the gateway, both Go services, Postg
 - simulation API: [http://localhost:8081/healthz](http://localhost:8081/healthz)
 - pgAdmin: [http://localhost:8083](http://localhost:8083)
 
+A fresh database includes **Demo Comets (Synthetic), 2024**, a roster of 12
+fictional players with sample batting statistics. Select that team and year to
+try the simulator. For an existing database, follow the
+[repeatable demo import instructions](postgres/README.md#synthetic-demo-roster).
+
 ## Configuration
 
 Key local environment variables:
