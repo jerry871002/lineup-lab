@@ -148,6 +148,15 @@ The simulator now performs stricter input validation:
 
 This protects the service from obviously invalid simulation input and makes the API behavior easier to reason about.
 
+## Simulation Result Metadata
+
+`POST /api/simulate` returns `average_score`, `average_hits`, `sample_count`,
+and `simulator_version`. `sample_count` is the number of games actually requested
+by the server for that result: 10 when `SIMULATION_DEBUG` is enabled and 100000
+in normal mode. The current engine version is `lineup-engine-v1`; changes to
+simulation rules should update this identifier. The metadata describes the
+simulation run and does not imply a ranked or dataset-certified result.
+
 ## CI
 
 Current GitHub Actions coverage includes:

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -20,6 +21,46 @@ func TestSimulateHandlerAcceptsValidPayload(t *testing.T) {
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("simulateHandler status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if response.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", response.Header().Get("Content-Type"))
+	}
+	var result struct {
+		AverageScore     *float64 `json:"average_score"`
+		AverageHits      *float64 `json:"average_hits"`
+		SampleCount      int      `json:"sample_count"`
+		SimulatorVersion string   `json:"simulator_version"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.SampleCount != 10 || result.SimulatorVersion != "lineup-engine-v1" {
+		t.Fatalf("debug result metadata = %d games, %q, want 10 games, lineup-engine-v1", result.SampleCount, result.SimulatorVersion)
+	}
+	for name, average := range map[string]*float64{"average_score": result.AverageScore, "average_hits": result.AverageHits} {
+		if average == nil || math.IsNaN(*average) || math.IsInf(*average, 0) || *average < 0 {
+			t.Fatalf("%s must remain a finite non-negative number", name)
+		}
+	}
+}
+
+func TestProductionSimulationResultPreservesAveragesAndConfiguredSampleCount(t *testing.T) {
+	server := &Server{}
+	numGames, _ := server.simulationConfig()
+	averages := map[string]float64{"average_score": 4.25, "average_hits": 9.5}
+	response := httptest.NewRecorder()
+	if err := writeJSON(response, newSimulationResult(averages, numGames)); err != nil {
+		t.Fatal(err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["sample_count"] != float64(100000) || result["simulator_version"] != "lineup-engine-v1" {
+		t.Fatalf("production result metadata = %v, want 100000 games, lineup-engine-v1", result)
+	}
+	if result["average_score"] != averages["average_score"] || result["average_hits"] != averages["average_hits"] {
+		t.Fatalf("result averages changed: %v", result)
 	}
 }
 
