@@ -9,6 +9,24 @@ import (
 	"github.com/rs/cors"
 )
 
+const simulatorVersion = "lineup-engine-v1"
+
+type simulationResult struct {
+	AverageScore     float64 `json:"average_score"`
+	AverageHits      float64 `json:"average_hits"`
+	SampleCount      int     `json:"sample_count"`
+	SimulatorVersion string  `json:"simulator_version"`
+}
+
+func newSimulationResult(averages map[string]float64, numGames int) simulationResult {
+	return simulationResult{
+		AverageScore:     averages["average_score"],
+		AverageHits:      averages["average_hits"],
+		SampleCount:      numGames,
+		SimulatorVersion: simulatorVersion,
+	}
+}
+
 type Server struct {
 	debugMode bool
 }
@@ -69,7 +87,7 @@ func (s *Server) simulateHandler(w http.ResponseWriter, r *http.Request) {
 	result := simulation.SimulateGamesInParallel(lineup, numGames, numBatches)
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = writeJSON(w, result)
+	_ = writeJSON(w, newSimulationResult(result, numGames))
 }
 
 func (s *Server) optimizeHandler(w http.ResponseWriter, r *http.Request) {
