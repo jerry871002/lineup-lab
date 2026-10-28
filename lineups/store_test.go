@@ -16,6 +16,10 @@ import (
 )
 
 func testDatabase(t *testing.T) *sql.DB {
+	return setupTestDatabase(t, true)
+}
+
+func setupTestDatabase(t *testing.T, upgrade bool) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("LINEUPS_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -58,17 +62,34 @@ func testDatabase(t *testing.T) *sql.DB {
 	if _, err := db.Exec("SELECT id FROM saved_lineups LIMIT 0"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE saved_lineups"); err != nil {
+	if _, err := db.Exec("SELECT id FROM simulation_runs LIMIT 0"); err != nil {
 		t.Fatal(err)
 	}
-	migration, err := os.ReadFile(filepath.Join("..", "postgres", "migrations", "20261028190000_lineups_create_saved_lineups.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Existing installations apply the migration; fresh bootstraps already have it.
-	for i := 0; i < 2; i++ {
-		if _, err := db.Exec(string(migration)); err != nil {
+	if upgrade {
+		if _, err := db.Exec("DROP TABLE simulation_runs"); err != nil {
 			t.Fatal(err)
+		}
+		if _, err := db.Exec("DROP TABLE saved_lineups"); err != nil {
+			t.Fatal(err)
+		}
+		migration, err := os.ReadFile(filepath.Join("..", "postgres", "migrations", "20261028190000_lineups_create_saved_lineups.sql"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Existing installations apply the migration; fresh bootstraps already have it.
+		for i := 0; i < 2; i++ {
+			if _, err := db.Exec(string(migration)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		historyMigration, err := os.ReadFile(filepath.Join("..", "postgres", "migrations", "20261028230000_lineups_create_simulation_runs.sql"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < 2; i++ {
+			if _, err := db.Exec(string(historyMigration)); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	if _, err := db.Exec("INSERT INTO users(id,username,email,password_hash) VALUES (7,'first','first@example.com','test-only'),(8,'second','second@example.com','test-only')"); err != nil {
