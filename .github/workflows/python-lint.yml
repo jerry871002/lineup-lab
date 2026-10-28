@@ -5,11 +5,13 @@ on:
     branches: ["main"]
     paths:
       - "auth/**"
+      - "ruff.toml"
       - ".github/workflows/python-lint.yml"
   pull_request:
     branches: ["main"]
     paths:
       - "auth/**"
+      - "ruff.toml"
       - ".github/workflows/python-lint.yml"
   workflow_dispatch:
 
