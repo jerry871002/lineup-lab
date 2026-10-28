@@ -13,6 +13,40 @@ Lineup Lab.
 - however, it is now transitional bootstrap convenience rather than the
   long-term schema source of truth
 
+## Synthetic Demo Roster
+
+A fresh Postgres data directory also runs [`seed-demo.sql`](./seed-demo.sql)
+after `init-table.sql`. It inserts 12 fictional players for
+**Demo Comets (Synthetic), 2024** so the roster and simulator work immediately
+without scraping a third-party website. These are synthetic sample statistics,
+not real player data. They have distinct names, valid batting counts, and
+non-zero out probabilities.
+
+To import the same roster into an existing local database, run from the repo root
+with the Compose stack running:
+
+```sh
+docker compose exec -T postgres sh -c \
+  'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < postgres/seed-demo.sql
+```
+
+The import is safe to repeat: `ON CONFLICT (name, team, year) DO NOTHING`
+preserves existing team data and any edits to demo players. Rebuilding the image
+alone does not import data into an existing volume because Postgres init scripts
+only run for a new data directory. Use the import command above; no volume reset
+is required.
+
+After starting or importing, select **Demo Comets (Synthetic)** and **2024** in
+the app. The seed contains more than nine players so users can compare lineups
+and try optimization.
+
+CI runs `bash postgres/tests/demo_seed.sh` against PostgreSQL. The test creates
+and removes its own test database, checks fresh imports and repeated imports,
+validates all 12 batters, and verifies existing teams and edited demo rows survive.
+It accepts the standard `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, and `PGDATABASE`
+connection variables; the test user needs permission to create databases.
+
 ## Migration Strategy
 
 The project now treats Atlas-managed migrations as the source of truth for
