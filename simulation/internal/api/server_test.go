@@ -208,11 +208,111 @@ func TestOptimizeHandler(t *testing.T) {
 	})
 }
 
-type stubOptimizer struct {
-	lineup simulation.Lineup
+func TestOptimizeHandlerRejectsInvalidPayloadsBeforeOptimization(t *testing.T) {
+	originalOptimizer := newOptimizer
+	t.Cleanup(func() { newOptimizer = originalOptimizer })
+	testCases := []struct {
+		name     string
+		body     string
+		wantBody string
+	}{
+		{"malformed json", `[{`, "invalid request body"},
+		{"unknown field", strings.Replace(validLineupJSON, `"hit":30`, `"hit":30,"unexpected":true`, 1), "unknown field"},
+		{"trailing json", validLineupJSON + `{}`, "single JSON value"},
+		{"trailing garbage", validLineupJSON + `!`, "single JSON value"},
+		{"null roster", `null`, "roster must have at least 9 batters"},
+		{"empty roster", `[]`, "roster must have at least 9 batters"},
+		{"wrong json type", `{}`, "invalid request body"},
+		{"short roster", `[` + strings.Join(validBatters[:8], ",") + `]`, "roster must have at least 9 batters"},
+		{"empty name", strings.Replace(validLineupJSON, `"Mike Trout"`, `"  "`, 1), "name must not be empty"},
+		{"negative stat", strings.Replace(validLineupJSON, `"ball_on_base":10`, `"ball_on_base":-1`, 1), "ball_on_base must be non-negative"},
+		{"zero at bat", strings.Replace(validLineupJSON, `"at_bat":100`, `"at_bat":0`, 1), "at_bat must be greater than 0"},
+		{"hits exceed at bats", strings.Replace(validLineupJSON, `"hit":30`, `"hit":101`, 1), "hit must not exceed at_bat"},
+		{"extra base hits exceed hits", strings.Replace(validLineupJSON, `"home_run":4`, `"home_run":40`, 1), "must not exceed hits"},
+		{"duplicate names", strings.Replace(validLineupJSON, `"Shohei Ohtani"`, `"Mike Trout"`, 1), "duplicates batter 0"},
+		{"normalized duplicate names", strings.Replace(validLineupJSON, `"Shohei Ohtani"`, `"  MIKE TROUT  "`, 1), "duplicates batter 0"},
+		{"all batters cannot record an out", impossibleOutLineupJSON, "fewer than 9 batters with zero out probability"},
+		{"nine no-out batters plus an out-capable batter", strings.TrimSuffix(impossibleOutLineupJSON, "]") + `,{"name":"Out","at_bat":100,"hit":30}]`, "fewer than 9 batters with zero out probability"},
+		{"invalid tenth batter", strings.TrimSuffix(validLineupJSON, "]") + `,{"name":"Extra","at_bat":10,"hit":11}]`, "batter 9 hit must not exceed at_bat"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			newOptimizer = func() simulation.Optimizer {
+				t.Fatal("optimizer must not be constructed for an invalid roster")
+				return stubOptimizer{}
+			}
+			request := httptest.NewRequest(http.MethodPost, "/optimize", strings.NewReader(testCase.body))
+			response := httptest.NewRecorder()
+			NewHandler(true, "http://localhost:3000").ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body = %s", response.Code, response.Body.String())
+			}
+			if !strings.Contains(response.Body.String(), testCase.wantBody) {
+				t.Fatalf("body = %q, want substring %q", response.Body.String(), testCase.wantBody)
+			}
+		})
+	}
 }
 
-func (s stubOptimizer) Optimize(simulation.Roster) simulation.Lineup {
+func TestOptimizeHandlerPassesValidRosterToOptimizer(t *testing.T) {
+	originalOptimizer := newOptimizer
+	t.Cleanup(func() { newOptimizer = originalOptimizer })
+
+	boundaryRoster := mustDecodeLineup(t, impossibleOutLineupJSON)
+	boundaryRoster[8].Hit = 30
+	boundaryRoster = append(boundaryRoster, simulation.Batter{Name: "Extra", AtBat: 100, Hit: 30})
+	boundaryJSON, err := json.Marshal(boundaryRoster)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		name string
+		body string
+	}{
+		{"nine batters", validLineupJSON},
+		{"ten batters", strings.TrimSuffix(validLineupJSON, "]") + `,{"name":"Extra","at_bat":100,"hit":30}]`},
+		{"eight no-out batters with two out-capable batters", string(boundaryJSON)},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var receivedRoster simulation.Roster
+			expectedRoster := mustDecodeLineup(t, testCase.body)
+			expectedLineup := simulation.Lineup(expectedRoster[:9])
+			newOptimizer = func() simulation.Optimizer {
+				return stubOptimizer{lineup: expectedLineup, receivedRoster: &receivedRoster}
+			}
+			request := httptest.NewRequest(http.MethodPost, "/optimize", strings.NewReader(testCase.body))
+			response := httptest.NewRecorder()
+			NewHandler(true, "http://localhost:3000").ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body = %s", response.Code, response.Body.String())
+			}
+			if !reflect.DeepEqual([]simulation.Batter(receivedRoster), expectedRoster) {
+				t.Fatalf("optimizer roster = %+v, want %+v", receivedRoster, expectedRoster)
+			}
+			var returnedLineup simulation.Lineup
+			if err := json.Unmarshal(response.Body.Bytes(), &returnedLineup); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(returnedLineup, expectedLineup) {
+				t.Fatalf("returned lineup = %+v, want %+v", returnedLineup, expectedLineup)
+			}
+		})
+	}
+}
+
+type stubOptimizer struct {
+	lineup         simulation.Lineup
+	receivedRoster *simulation.Roster
+}
+
+func (s stubOptimizer) Optimize(roster simulation.Roster) simulation.Lineup {
+	if s.receivedRoster != nil {
+		*s.receivedRoster = roster
+	}
 	return s.lineup
 }
 
