@@ -161,6 +161,17 @@ jobs:
         run: |
           grep -F "<title>Lineup Lab</title>" gateway-root.html
 
+      - name: Verify gateway security headers
+        run: |
+          curl -fsSI http://localhost:8080/ > gateway-root.headers
+          grep -F "Content-Security-Policy:" gateway-root.headers
+          grep -F "default-src 'self'" gateway-root.headers
+          grep -F "script-src 'self'" gateway-root.headers
+          grep -F "object-src 'none'" gateway-root.headers
+          grep -F "frame-ancestors 'none'" gateway-root.headers
+          grep -F "X-Content-Type-Options: nosniff" gateway-root.headers
+          grep -F "Referrer-Policy: same-origin" gateway-root.headers
+
       - name: Wait for proxied teams endpoint
         run: |
           for attempt in $(seq 1 30); do
