@@ -35,3 +35,10 @@ Run locally once dependencies are installed:
 ```sh
 uvicorn app.main:app --app-dir auth --reload
 ```
+
+Internal gateway integration:
+- `GET /internal/auth/verify` validates sessions and, for original mutating
+  methods, the signed CSRF cookie/header pair. Successful checks return 204
+  with `X-Authenticated-User-ID`. This endpoint must remain internal.
+- Gateway enforcement and resource ownership queries are follow-up work; see
+  [the resource authorization contract](../docs/resource-authorization.md).

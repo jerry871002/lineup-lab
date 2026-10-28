@@ -83,3 +83,26 @@ def me(
     session_id = require_session_id(session_cookie)
     user = require_current_user(db, session_id)
     return UserResponse(id=user.id, username=user.username, email=user.email)
+
+
+@app.get("/internal/auth/verify", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+def verify_internal_request(
+    db: Session = Depends(get_db),
+    session_cookie: str | None = Cookie(default=None, alias=settings.session_cookie_name),
+    csrf_cookie: str | None = Cookie(default=None, alias=settings.csrf_cookie_name),
+    csrf_header: str | None = Header(default=None, alias="X-CSRF-Token"),
+    original_method: str | None = Header(default=None, alias="X-Original-Method"),
+) -> Response:
+    session_id = require_session_id(session_cookie)
+    user = require_current_user(db, session_id)
+
+    if original_method not in ("GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="original request method is invalid")
+
+    if original_method in ("POST", "PUT", "PATCH", "DELETE"):
+        if csrf_cookie is None or csrf_header is None or csrf_cookie != csrf_header:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="csrf token is invalid")
+        if not is_valid_csrf_token(session_id, csrf_cookie):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="csrf token is invalid")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"X-Authenticated-User-ID": str(user.id)})

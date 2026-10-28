@@ -1,0 +1,3 @@
+[lint]
+# Preserve the established checks when Ruff adds new defaults.
+select = ["E4", "E7", "E9", "F"]
