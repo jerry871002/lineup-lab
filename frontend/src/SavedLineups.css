@@ -1,0 +1,47 @@
+.saved-lineups {
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    max-width: 720px;
+    margin: 20px auto;
+}
+
+.saved-lineups label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-block: 12px;
+    font-weight: 600;
+}
+
+.saved-lineups input,
+.saved-lineups select,
+.saved-lineups button {
+    font: inherit;
+    padding: 10px;
+    border: 1px solid #666;
+    border-radius: 4px;
+}
+
+.saved-lineups-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.saved-lineups button:not(:disabled) {
+    cursor: pointer;
+}
+
+.saved-lineups button:disabled {
+    opacity: 0.6;
+}
+
+.saved-lineups :focus-visible {
+    outline: 3px solid #1258ad;
+    outline-offset: 2px;
+}
+
+.saved-lineups [role="alert"] {
+    color: #a01414;
+}
