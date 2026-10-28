@@ -1,9 +1,9 @@
 # User-owned resource authorization
 
 This contract defines the identity boundary for #34 and saved lineups under #35.
-The internal auth verifier is implemented. Gateway enforcement and the lineups
-service are follow-up work; this contract does not make existing domain routes
-protected by itself.
+The internal auth verifier and gateway enforcement protect the internal lineups
+service. Browser requests use `/api/lineups` for saved lineups and run requests,
+and `/api/simulations` for personal simulation history.
 
 ## Ownership
 
@@ -79,6 +79,16 @@ verify that nonexistent and cross-owner IDs both return 404 and that neither
 the internal verifier nor lineups is publicly routed.
 
 The auth tests cover the verifier's session/CSRF decisions using an in-memory
-database double and the real session and signing helpers. They do not prove
-nginx routing, header replacement, network isolation, or resource ownership
-queries. Those checks belong to the gateway and lineups implementation PRs.
+database double and the real session and signing helpers. The Compose workflow
+also runs `python3 gateway/tests/lineups_smoke.py` through the real nginx, auth,
+lineups, stats, simulation, and Postgres services. It verifies signed-cookie
+handling, missing/tampered/cross-session CSRF rejection, original-method spoof
+rejection, identity replacement, owner CRUD isolation, revision conflicts, and
+revoked sessions. Compose configuration checks ensure auth and lineups publish
+no host ports and that lineups receives no session signing secret.
+
+The protected location captures the original method before `auth_request` makes
+its GET subrequest. Setting `X-Original-Method: GET` on a browser POST cannot
+skip CSRF checks. Only auth receives the browser cookies and CSRF header;
+lineups receives the canonical identity and no Cookie, Authorization, CSRF, or
+client identity alias headers. Failed auth never falls through to frontend HTML.
