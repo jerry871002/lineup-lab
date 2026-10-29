@@ -61,9 +61,12 @@ type LineupStore interface {
 type RosterLoader func(context.Context, string, int) ([]Batter, error)
 
 type Server struct {
-	Store  LineupStore
-	Roster RosterLoader
-	Ready  func(context.Context) error
+	SimulationTimeout time.Duration
+	History           HistoryStore
+	Simulate          Simulator
+	Store             LineupStore
+	Roster            RosterLoader
+	Ready             func(context.Context) error
 }
 
 func (s *Server) Handler() http.Handler {
@@ -78,6 +81,8 @@ func (s *Server) Handler() http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("GET /simulations", s.listSimulations)
+	mux.HandleFunc("POST /lineups/{id}/simulations", s.runSimulation)
 	mux.HandleFunc("GET /lineups", s.list)
 	mux.HandleFunc("POST /lineups", s.save)
 	mux.HandleFunc("GET /lineups/{id}", s.get)
@@ -92,7 +97,11 @@ func (s *Server) Handler() http.Handler {
 				return
 			}
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		budget := crudRequestTimeout
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/lineups/") && strings.HasSuffix(r.URL.Path, "/simulations") {
+			budget = s.simulationBudget()
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), budget)
 		defer cancel()
 		mux.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -276,8 +285,13 @@ func loadRoster(client *http.Client, base string) RosterLoader {
 
 func main() {
 	databaseURL, statsURL := os.Getenv("DATABASE_URL"), os.Getenv("STATS_BASE_URL")
-	if databaseURL == "" || statsURL == "" {
-		log.Fatal("DATABASE_URL and STATS_BASE_URL must be set")
+	simulationURL := os.Getenv("SIMULATION_BASE_URL")
+	if databaseURL == "" || statsURL == "" || simulationURL == "" {
+		log.Fatal("DATABASE_URL, STATS_BASE_URL and SIMULATION_BASE_URL must be set")
+	}
+	simulationTimeout, err := simulationTimeoutFromEnv()
+	if err != nil {
+		log.Fatal(err)
 	}
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
@@ -291,7 +305,22 @@ func main() {
 	if port == "" {
 		port = "80"
 	}
-	server := &Server{Store: &SQLStore{DB: db}, Roster: loadRoster(&http.Client{Timeout: 8 * time.Second}, statsURL), Ready: db.PingContext}
-	httpServer := &http.Server{Addr: ":" + port, Handler: server.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	store := &SQLStore{DB: db}
+	server := &Server{
+		Store:             store,
+		History:           store,
+		Simulate:          simulateLineup(&http.Client{Timeout: simulationTimeout}, simulationURL),
+		SimulationTimeout: simulationTimeout,
+		Roster:            loadRoster(&http.Client{Timeout: 8 * time.Second}, statsURL),
+		Ready:             db.PingContext,
+	}
+	httpServer := &http.Server{
+		Addr:              ":" + port,
+		Handler:           server.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      server.simulationBudget() + responseWriteGrace,
+		IdleTimeout:       60 * time.Second,
+	}
 	log.Fatal(httpServer.ListenAndServe())
 }
