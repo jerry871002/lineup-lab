@@ -1,7 +1,7 @@
 import React from 'react';
 import LineupSlot from './LineupSlot.jsx';
 
-const Lineup = ({ lineup, movePlayerToSlot, removePlayerFromSlot, simulateLineup, simulationResult }) => {
+const Lineup = ({ lineup, movePlayerToSlot, removePlayerFromSlot, simulateLineup, simulationResult, canSimulate = true, isSimulating = false, simulationError }) => {
   return (
     <div>
       <h2>Lineup</h2>
@@ -15,7 +15,8 @@ const Lineup = ({ lineup, movePlayerToSlot, removePlayerFromSlot, simulateLineup
         />
       ))}
       <div className="simulate-results">
-        <button className="simulate-button" onClick={simulateLineup}>Simulate</button>
+        <button className="simulate-button" onClick={simulateLineup} disabled={!canSimulate || isSimulating}>{isSimulating ? 'Simulating...' : 'Simulate'}</button>
+        {simulationError && <p role="alert">{simulationError}</p>}
         {simulationResult && (
           <div>
             <p>Average Score: <strong>{simulationResult.average_score.toFixed(2)}</strong></p>

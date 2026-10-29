@@ -4,11 +4,15 @@ Lineup Lab is a microservice-style baseball lineup simulator built to practice G
 
 ## Local Architecture
 
-The local Docker Compose stack has five services:
+The local Docker Compose stack has seven services:
 
 - `gateway`
   - browser-facing reverse proxy on `http://localhost:8080`
   - serves the built frontend and exposes the single public `/api` surface
+- `auth`
+  - internal session, registration, login, logout, and CSRF verification API
+- `lineups`
+  - internal saved-lineup and personal simulation history API
 - `stats`
   - Go API for roster and batting data on `http://localhost:8082`
 - `simulation`
@@ -26,12 +30,20 @@ flowchart LR
     Gateway["gateway (:8080)\nnginx reverse proxy + static frontend"]
     Stat["stats (:8082)\nteam and batting endpoints"]
     Sim["simulation (:8081)\nsimulate and optimize endpoints"]
+    Auth["auth\nsessions + CSRF"]
+    Lineups["lineups\nsaved orders + personal history"]
     DB["postgres (:5432)\nPostgres"]
     PgAdmin["pgadmin (:8083)"]
 
     Browser -->|"/ and /api/*"| Gateway
     Gateway -->|"/api/teams, /api/batting"| Stat
     Gateway -->|"/api/simulate, /api/optimize"| Sim
+    Gateway -->|"/api/auth/*, /api/users/*"| Auth
+    Gateway -->|"authenticated /api/lineups*, /api/simulations"| Lineups
+    Lineups -->|"resolve roster"| Stat
+    Lineups -->|"compute saved run"| Sim
+    Lineups --> DB
+    Auth --> DB
     Stat --> DB
     PgAdmin --> DB
     Browser --> PgAdmin
@@ -43,7 +55,9 @@ Production-style local request flow:
 2. nginx in the gateway routes `/api/teams` and `/api/batting` to `stats`
 3. nginx in the gateway routes `/api/simulate` and `/api/optimize` to `simulation`
 4. `stats` reads batting data from Postgres
-5. `pgadmin` remains a separate local admin UI on `http://localhost:8083`
+5. `auth` validates sessions and signed CSRF tokens; the gateway replaces identity headers before forwarding personal-resource requests to the private `lineups` service
+6. `lineups` resolves canonical rosters through stats, persists user-owned batting orders, and records server-computed simulation results
+7. `pgadmin` remains a separate local admin UI on `http://localhost:8083`
 
 ## Local Development
 
@@ -60,6 +74,8 @@ The default `.env.example` values are set up for local development, but you shou
 - `POSTGRES_PASSWORD`
 - `PGADMIN_DEFAULT_PASSWORD`
 - `STATS_DATABASE_URL`
+- `AUTH_DATABASE_URL`
+- `LINEUPS_DATABASE_URL`
 
 If you change the database credentials, keep `STATS_DATABASE_URL` in sync with them.
 
@@ -83,6 +99,27 @@ fictional players with sample batting statistics. Select that team and year to
 try the simulator. For an existing database, follow the
 [repeatable demo import instructions](postgres/README.md#synthetic-demo-roster).
 
+## Try the MVP
+
+1. Open the app and register an account with a password of at least 15 characters.
+2. Select **Demo Comets (Synthetic), 2024**. These 12 fictional hitters are seeded for first-run exploration.
+3. Drag nine distinct hitters into batting-order slots. Use **Simulate** for a temporary result.
+4. Enter a lineup name and choose **Save as new lineup**. Use **Simulate and record** to compute the latest saved revision and add it to your personal history.
+5. Refresh the page, select the saved lineup, and choose **Load selected lineup** to restore the ordered batting snapshot. Use **Update loaded lineup** to save further edits.
+6. Inspect **My simulation history** for scores, sample counts, engine versions, and the exact batting order used. Personal practice results remain available after a saved lineup is edited or deleted.
+
+Auth and lineups stay internal to Compose. The gateway authenticates each personal-resource request and checks signed CSRF on writes; storage queries additionally scope every resource to its owner. The UI clears private state when a session expires or the user logs out.
+
+For existing database volumes, import demo data as documented in [postgres/README.md](postgres/README.md) and apply both saved-lineup migrations in order before starting the new service:
+
+```sh
+for migration in postgres/migrations/20261028190000_lineups_create_saved_lineups.sql postgres/migrations/20261028230000_lineups_create_simulation_runs.sql; do
+  docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$migration"
+done
+```
+
+Fresh empty databases receive the same schema during bootstrap. Never delete an existing volume to apply these changes.
+
 ## Configuration
 
 Key local environment variables:
@@ -94,8 +131,15 @@ Key local environment variables:
 - `POSTGRES_PASSWORD`
 - `STATS_DATABASE_URL`
 
+### Sessions
+
+- `SESSION_HMAC_SECRET`: set a long random secret
+- `SESSION_COOKIE_SECURE`: false for local HTTP, true when served over HTTPS
+
 ### Service ports
 
+- `AUTH_PORT` (internal only)
+- `LINEUPS_PORT` (internal only)
 - `STATS_PORT`
 - `STATS_HOST_PORT`
 - `SIMULATION_PORT`
@@ -208,6 +252,7 @@ The frontend coverage summary is written to `frontend/coverage/coverage-summary.
 
 - frontend app: [frontend/README.md](frontend/README.md)
 - auth service: [auth/README.md](auth/README.md)
+- saved lineups and personal history service: [lineups/README.md](lineups/README.md)
 - postgres bootstrap and migration notes: [postgres/README.md](postgres/README.md)
 - architecture decisions: [docs/adr/README.md](docs/adr/README.md)
 - auth session strategy: [docs/auth-session-strategy.md](docs/auth-session-strategy.md)
