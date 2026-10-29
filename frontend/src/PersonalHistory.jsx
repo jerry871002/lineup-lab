@@ -38,14 +38,14 @@ const PersonalHistory = ({ refreshToken, onSessionExpired }) => {
   return (
     <section className="personal-history" aria-labelledby="history-heading">
       <h2 id="history-heading">My simulation history</h2>
-      <p>Latest 100 saved runs. These are personal practice results.</p>
+      <p>Your latest 100 simulations, recorded automatically.</p>
       {loading && <p role="status">Loading history...</p>}
       {error && <div role="alert">{error} <button type="button" onClick={() => setRetry(value => value + 1)}>Retry history</button></div>}
-      {!loading && !error && items.length === 0 && <p>Save a lineup, then choose Simulate and record to start your history.</p>}
+      {!loading && !error && items.length === 0 && <p>Run a simulation to start your history.</p>}
       {!error && items.map(item => (
         <article key={item.id} className="history-run">
           <h3>{item.lineup_name}</h3>
-          <p>{item.team} ({item.year}) · Revision {item.lineup_revision}</p>
+          <p>{item.team} ({item.year}){item.lineup_revision > 0 && <> · Saved revision {item.lineup_revision}</>}</p>
           <p>Average score: <strong>{item.average_score.toFixed(2)}</strong> · Average hits: <strong>{item.average_hits.toFixed(2)}</strong></p>
           <p>{item.sample_count.toLocaleString()} games · {item.simulator_version} · <time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></p>
           <details>
