@@ -22,9 +22,8 @@ vi.mock('react-dnd', () => ({
 
 const panelState = vi.hoisted(() => ({ saved: null }));
 vi.mock('./SavedLineups.jsx', () => ({
-  default: ({ onLoad, onSimulate, onSessionExpired }) => panelState.saved ? <div>
+  default: ({ onLoad, onSessionExpired }) => panelState.saved ? <div>
     <button onClick={() => onLoad(panelState.saved)}>Load test snapshot</button>
-    <button onClick={() => onSimulate(panelState.saved, new AbortController().signal).catch(() => {})}>Record test snapshot</button>
     <button onClick={onSessionExpired}>Expire test session</button>
   </div> : null,
 }));
@@ -351,7 +350,8 @@ describe('App', () => {
     expect(screen.getByText(/Signed in as/)).toBeInTheDocument();
   });
 
-  it.each(['teams', 'batting', 'simulate'])('ignores a pending %s response after logout and another login', async (endpoint) => {
+  it.each(['teams', 'batting', 'simulations', 'simulations-401'])('ignores a pending %s response after logout and another login', async (pendingResponse) => {
+    const endpoint = pendingResponse.replace('-401', '');
     const user = userEvent.setup();
     let completeOldRequest;
     let firstSession = true;
@@ -368,13 +368,13 @@ describe('App', () => {
       if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }]);
       return createJSONResponse([]);
     });
-    if (endpoint === 'simulate') panelState.saved = savedFixture();
+    if (endpoint === 'simulations') panelState.saved = savedFixture();
     render(<App />);
     if (endpoint === 'batting') {
       await screen.findByRole('option', { name: 'Yankees (2024)' });
       await user.selectOptions(screen.getByRole('combobox'), 'Yankees+2024');
     }
-    if (endpoint === 'simulate') {
+    if (endpoint === 'simulations') {
       await user.click(await screen.findByRole('button', { name: 'Load test snapshot' }));
       await user.click(await screen.findByRole('button', { name: 'Simulate' }));
     }
@@ -386,7 +386,7 @@ describe('App', () => {
     const staleData = endpoint === 'teams' ? [{ name: 'Stale team', year: 2024 }]
       : endpoint === 'batting' ? [{ name: 'Stale player', at_bat: 100, hit: 30 }]
       : { average_score: 99, average_hits: 99 };
-    await act(async () => completeOldRequest(await createJSONResponse(staleData)));
+    await act(async () => completeOldRequest(await (pendingResponse.endsWith('-401') ? createErrorResponse(401, { detail: 'expired' }) : createJSONResponse(staleData))));
     expect(screen.queryByText(/Stale/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Average Score:/)).not.toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Yankees (2024)' })).toBeInTheDocument();
@@ -544,7 +544,7 @@ describe('App', () => {
     expect(await screen.findByText(/Juan Soto/)).toBeInTheDocument();
   });
 
-  it('sends only the simulation batter fields after building a lineup from roster data', async () => {
+  it('simulates an unsaved batting order with only its team-season and player IDs', async () => {
     const user = userEvent.setup();
     const batters = Array.from({ length: 9 }, (_, index) => ({
       name: `Player ${index + 1}`,
@@ -566,7 +566,8 @@ describe('App', () => {
       .mockImplementationOnce(() => createJSONResponse(currentUser))
       .mockImplementationOnce(() => createJSONResponse([{ name: 'Yankees', year: 2024 }]))
       .mockImplementationOnce(() => createJSONResponse(roster))
-      .mockImplementationOnce(() => createJSONResponse({ average_score: 4.5, average_hits: 9.25 }));
+      .mockImplementationOnce(() => createJSONResponse({ average_score: 4.5, average_hits: 9.25, batters: roster }))
+      .mockImplementationOnce(() => createJSONResponse({ average_score: 5, average_hits: 10, batters: [roster[1], roster[0], ...roster.slice(2)] }));
 
     const { container } = render(<App />);
     await screen.findByRole('option', { name: 'Yankees (2024)' });
@@ -588,12 +589,23 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Simulate' }));
 
     const [url, options] = global.fetch.mock.calls[3];
-    expect(url).toBe('/api/simulate');
+    expect(url).toBe('/api/simulations');
     expect(options.method).toBe('POST');
     expect(options.headers['Content-Type']).toBe('application/json');
-    expect(JSON.parse(options.body)).toEqual(batters);
+    expect(JSON.parse(options.body)).toEqual({ team: 'Yankees', year: 2024, batter_ids: roster.map(player => player.id) });
+    expect(global.fetch.mock.calls.some(([path]) => path === '/api/lineups')).toBe(false);
+    expect(screen.getByTestId('history-refresh')).toHaveTextContent('1');
     expect(await screen.findByText(/Average Score:/)).toHaveTextContent('4.50');
     expect(screen.getByText(/Average Hits:/)).toHaveTextContent('9.25');
+    act(() => dndState.dropTargets.get(slots[0])(dndState.players.get('Player 2')));
+    expect(screen.queryByText(/Average Score:/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Simulate' }));
+    const runs = global.fetch.mock.calls.filter(([path]) => path === '/api/simulations');
+    expect(runs).toHaveLength(2);
+    expect(JSON.parse(runs[1][1].body).batter_ids).toEqual([2, 1, 3, 4, 5, 6, 7, 8, 9]);
+    expect(global.fetch.mock.calls.some(([path]) => path === '/api/lineups')).toBe(false);
+    expect(await screen.findByText(/Average Score:/)).toHaveTextContent('5.00');
+    expect(screen.getByTestId('history-refresh')).toHaveTextContent('2');
   });
   it('restores the saved batting snapshot while excluding its IDs from the current roster', async () => {
     const user = userEvent.setup();
@@ -619,7 +631,7 @@ describe('App', () => {
     global.fetch = vi.fn(url => {
       if (url === '/api/users/me') return createJSONResponse(currentUser);
       if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }]);
-      if (url === '/api/simulate') return createErrorResponse(400, { detail: 'invalid lineup' });
+      if (url === '/api/simulations') return createErrorResponse(400, { detail: 'invalid lineup' });
       return createJSONResponse([]);
     });
     render(<App />);
@@ -631,7 +643,7 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Simulate' })).toBeEnabled();
   });
 
-  it('records a saved lineup with server-side scores and refreshes personal history', async () => {
+  it('records the current batting order with CSRF and refreshes personal history', async () => {
     const user = userEvent.setup();
     const saved = savedFixture();
     panelState.saved = saved;
@@ -640,17 +652,18 @@ describe('App', () => {
     global.fetch = vi.fn(url => {
       if (url === '/api/users/me') return createJSONResponse(currentUser);
       if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }]);
-      if (url === '/api/lineups/42/simulations') return createJSONResponse(run);
+      if (url === '/api/simulations') return createJSONResponse(run);
       return createJSONResponse([]);
     });
     render(<App />);
-    await user.click(await screen.findByRole('button', { name: 'Record test snapshot' }));
+    await user.click(await screen.findByRole('button', { name: 'Load test snapshot' }));
+    await user.click(screen.getByRole('button', { name: 'Simulate' }));
     expect(await screen.findByText(/Average Score:/)).toHaveTextContent('4.50');
     expect(screen.getByTestId('history-refresh')).toHaveTextContent('1');
-    const [, options] = global.fetch.mock.calls.find(([url]) => url === '/api/lineups/42/simulations');
+    const [, options] = global.fetch.mock.calls.find(([url]) => url === '/api/simulations');
     expect(options.method).toBe('POST');
     expect(options.headers['X-CSRF-Token']).toBe('signed:csrf:token=');
-    expect(options.body).toBeUndefined();
+    expect(JSON.parse(options.body)).toEqual({ team: saved.team, year: saved.year, batter_ids: saved.batters.map(player => player.id) });
   });
 
   it('clears the private workspace when a resource reports an expired session', async () => {
@@ -672,7 +685,7 @@ describe('App', () => {
     global.fetch = vi.fn(url => {
       if (url === '/api/users/me') return createJSONResponse(currentUser);
       if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }]);
-      if (url === '/api/simulate') return new Promise(resolve => { finish = resolve; });
+      if (url === '/api/simulations') return new Promise(resolve => { finish = resolve; });
       return createJSONResponse([]);
     });
     render(<App />);
@@ -681,7 +694,7 @@ describe('App', () => {
     const busy = screen.getByRole('button', { name: 'Simulating...' });
     expect(busy).toBeDisabled();
     await user.click(busy);
-    expect(global.fetch.mock.calls.filter(([url]) => url === '/api/simulate')).toHaveLength(1);
+    expect(global.fetch.mock.calls.filter(([url]) => url === '/api/simulations')).toHaveLength(1);
     await act(async () => finish(await createJSONResponse({ average_score: 4.5, average_hits: 9.25 })));
     expect(screen.getByRole('button', { name: 'Simulate' })).toBeEnabled();
   });
@@ -693,7 +706,7 @@ describe('App', () => {
     global.fetch = vi.fn(url => {
       if (url === '/api/users/me') return createJSONResponse(currentUser);
       if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }, { name: 'New team', year: 2024 }]);
-      if (url === '/api/simulate') return createJSONResponse({ average_score: 4.5, average_hits: 9.25 });
+      if (url === '/api/simulations') return createJSONResponse({ average_score: 4.5, average_hits: 9.25 });
       if (url.includes('team=Yankees')) return new Promise(resolve => { finishOldRoster = resolve; });
       return createJSONResponse([{ ...savedFixture().batters[0], id: 100, name: 'New team player' }]);
     });
@@ -710,23 +723,44 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Simulate' })).toBeDisabled();
   });
 
-  it('clears the previous result when recording a saved simulation fails', async () => {
+
+  it('clears the previous score when a later current-lineup run fails', async () => {
     const user = userEvent.setup();
     panelState.saved = savedFixture();
+    let attempts = 0;
     global.fetch = vi.fn(url => {
       if (url === '/api/users/me') return createJSONResponse(currentUser);
       if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }]);
-      if (url === '/api/simulate') return createJSONResponse({ average_score: 4.5, average_hits: 9.25 });
-      if (url === '/api/lineups/42/simulations') return createErrorResponse(503, { detail: 'Simulator unavailable' });
+      if (url === '/api/simulations') return ++attempts === 1
+        ? createJSONResponse({ average_score: 4.5, average_hits: 9.25 })
+        : createErrorResponse(503, { detail: 'Simulator unavailable' });
       return createJSONResponse([]);
     });
     render(<App />);
     await user.click(await screen.findByRole('button', { name: 'Load test snapshot' }));
     await user.click(screen.getByRole('button', { name: 'Simulate' }));
     await screen.findByText(/Average Score:/);
-    await user.click(screen.getByRole('button', { name: 'Record test snapshot' }));
-    await waitFor(() => expect(screen.queryByText(/Average Score:/)).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Simulate' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Simulator unavailable');
+    expect(screen.queryByText(/Average Score:/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Simulate' })).toBeEnabled();
   });
+
+  it('leaves the private workspace when a current simulation session expires', async () => {
+    const user = userEvent.setup();
+    panelState.saved = savedFixture();
+    global.fetch = vi.fn(url => {
+      if (url === '/api/users/me') return createJSONResponse(currentUser);
+      if (url === '/api/teams') return createJSONResponse([{ name: 'Yankees', year: 2024 }]);
+      if (url === '/api/simulations') return createErrorResponse(401, { detail: 'authentication required' });
+      return createJSONResponse([]);
+    });
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Load test snapshot' }));
+    await user.click(screen.getByRole('button', { name: 'Simulate' }));
+    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.queryByText(/Saved Player/)).not.toBeInTheDocument();
+  });
+
 
 });

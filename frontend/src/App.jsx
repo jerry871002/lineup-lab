@@ -265,20 +265,30 @@ const App = () => {
     setIsSimulating(true);
     setSimulationError('');
     setSimulationResult(null);
-    const batters = lineup.map(({ name, at_bat, hit, double, triple, home_run, ball_on_base, hit_by_pitch }) => ({
-      name, at_bat, hit, double, triple, home_run, ball_on_base, hit_by_pitch,
-    }));
+    const separator = selectedTeam.lastIndexOf('+');
+    const payload = {
+      team: selectedTeam.slice(0, separator),
+      year: Number(selectedTeam.slice(separator + 1)),
+      batter_ids: lineup.map(player => player.id),
+    };
     try {
-      const response = await fetch(`${apiBasePath}/simulate`, {
+      const response = await fetch(`${apiBasePath}/simulations`, {
         method: 'POST',
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(batters),
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': readCookie(csrfCookieName) || '' },
+        body: JSON.stringify(payload),
       });
-      if (!response.ok) throw new Error('Simulation failed. Please check the lineup and try again.');
+      if (controller.signal.aborted || workspace !== workspaceVersion.current || version !== simulationVersion.current) return;
+      if (response.status === 401) { leaveExpiredSession(); return; }
+      if (!response.ok) throw new Error(`Simulation failed. ${await parseAPIError(response)}`);
       const result = await response.json();
       if (!Number.isFinite(result.average_score) || !Number.isFinite(result.average_hits)) throw new Error('The simulation response could not be read.');
-      if (!controller.signal.aborted && workspace === workspaceVersion.current && version === simulationVersion.current) setSimulationResult(result);
+      if (!controller.signal.aborted && workspace === workspaceVersion.current && version === simulationVersion.current) {
+        if (Array.isArray(result.batters) && result.batters.length === 9) setLineup(result.batters.map(decoratePlayer));
+        setSimulationResult(result);
+        setHistoryRefresh(value => value + 1);
+      }
     } catch (error) {
       if (!controller.signal.aborted && workspace === workspaceVersion.current && version === simulationVersion.current) setSimulationError(error.message || 'Simulation failed. Please try again.');
     } finally {
@@ -307,43 +317,6 @@ const App = () => {
     setSelectedTeam(teamKey);
     setLineup(saved.batters.map(decoratePlayer));
     setRosterReload(value => value + 1);
-  };
-
-  const simulateSavedLineup = async (saved, signal) => {
-    if (simulationRequest.current) throw new Error('A simulation is already running.');
-    const version = workspaceVersion.current;
-    const operation = new AbortController();
-    const abort = () => operation.abort();
-    if (signal.aborted) operation.abort();
-    signal.addEventListener('abort', abort, { once: true });
-    simulationRequest.current = operation;
-    setIsSimulating(true);
-    setSimulationError('');
-    setSimulationResult(null);
-    try {
-      const response = await fetch(`${apiBasePath}/lineups/${saved.id}/simulations`, {
-        method: 'POST', credentials: 'same-origin', signal: operation.signal,
-        headers: { 'X-CSRF-Token': readCookie(csrfCookieName) || '' },
-      });
-      if (!response.ok) {
-        const error = new Error(await parseAPIError(response));
-        error.status = response.status;
-        throw error;
-      }
-      const result = await response.json();
-      if (operation.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
-      if (version !== workspaceVersion.current) return;
-      if (!Number.isFinite(result.average_score) || !Number.isFinite(result.average_hits)) throw new Error('The recorded result could not be read.');
-      loadSavedLineup(result);
-      setSimulationResult(result);
-      setHistoryRefresh(value => value + 1);
-    } finally {
-      signal.removeEventListener('abort', abort);
-      if (simulationRequest.current === operation) {
-        simulationRequest.current = null;
-        setIsSimulating(false);
-      }
-    }
   };
 
   const onAuthFormChange = (event) => {
@@ -581,7 +554,7 @@ const App = () => {
               removePlayerFromSlot={removePlayerFromSlot}
               simulateLineup={simulateLineup}
               simulationResult={simulationResult}
-              canSimulate={lineup.every(Boolean)}
+              canSimulate={Boolean(selectedTeam) && lineup.every(Boolean)}
               isSimulating={isSimulating}
               simulationError={simulationError}
             />
@@ -595,7 +568,7 @@ const App = () => {
           </div>
         </div>
         <div className="container">
-          <SavedLineups key={`saved-${currentUser.id}`} selectedTeam={selectedTeam} lineup={lineup} onLoad={loadSavedLineup} onSessionExpired={leaveExpiredSession} onSimulate={simulateSavedLineup} simulationBusy={isSimulating} />
+          <SavedLineups key={`saved-${currentUser.id}`} selectedTeam={selectedTeam} lineup={lineup} onLoad={loadSavedLineup} onSessionExpired={leaveExpiredSession} />
         </div>
         <PersonalHistory key={`history-${currentUser.id}`} refreshToken={historyRefresh} onSessionExpired={leaveExpiredSession} />
         </>

@@ -61,7 +61,7 @@ const request = async (path, signal, method = 'GET', body) => {
   return data;
 };
 
-const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired, onSimulate, simulationBusy = false }) => {
+const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired }) => {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [current, setCurrent] = useState(null);
@@ -167,7 +167,7 @@ const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired, onSimula
   return (
     <section className="saved-lineups" aria-label="Saved lineups" aria-busy={busy}>
       <h2>Saved lineups</h2>
-      <p>Your latest 100 saved lineups. Loading replaces the current batting order.</p>
+      <p>Optional: keep a named lineup to return to later. Every simulation is recorded automatically. Loading replaces the current batting order.</p>
       <label>
         Saved lineup
         <select value={selectedId} onChange={event => setSelectedId(event.target.value)} disabled={busy}>
@@ -193,13 +193,6 @@ const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired, onSimula
           <button type="button" onClick={() => save(true)} disabled={busy || !canSave || !current}>Update loaded lineup</button>
         </div>
       </form>
-      {onSimulate && <div className="saved-lineups-actions">
-        <button type="button" disabled={busy || simulationBusy || !current} onClick={() => run(async signal => {
-          await onSimulate(current, signal);
-          if (!signal.aborted) setMessage('Simulation recorded in your history.');
-        })}>Simulate and record</button>
-        <p>Runs the latest saved revision on the server. Update it first to include your latest edits.</p>
-      </div>}
       {busy && <p role="status">Working on saved lineups...</p>}
       {message && <p role="status">{message}</p>}
       {error && <p role="alert">{error}</p>}

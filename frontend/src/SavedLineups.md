@@ -34,6 +34,7 @@ the auth service's quoted cookie format.
 
 The App adapter now mounts this panel inside the authenticated workspace, restores
 snapshot display statistics, refreshes the remaining roster, and clears obsolete
-results. `onSimulate(savedItem, signal)` computes the latest server-saved revision
-through the protected history endpoint; `simulationBusy` prevents concurrent runs.
-PersonalHistory refreshes after a recorded run and both panels remount per user.
+results. The main Simulate button sends the current team-season and ordered IDs to the
+protected `/api/simulations` endpoint. Every run refreshes PersonalHistory without
+creating or updating a named lineup. This panel is only for optional collection;
+both panels remount per user.

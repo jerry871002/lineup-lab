@@ -15,12 +15,14 @@ const Lineup = ({ lineup, movePlayerToSlot, removePlayerFromSlot, simulateLineup
         />
       ))}
       <div className="simulate-results">
+        <p>Try this batting order. Each simulation is recorded automatically.</p>
         <button className="simulate-button" onClick={simulateLineup} disabled={!canSimulate || isSimulating}>{isSimulating ? 'Simulating...' : 'Simulate'}</button>
         {simulationError && <p role="alert">{simulationError}</p>}
         {simulationResult && (
           <div>
             <p>Average Score: <strong>{simulationResult.average_score.toFixed(2)}</strong></p>
             <p>Average Hits: <strong>{simulationResult.average_hits.toFixed(2)}</strong></p>
+            {simulationResult.sample_count && <p>{simulationResult.sample_count.toLocaleString()} games · Recorded in your history</p>}
           </div>
         )}
       </div>

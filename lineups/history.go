@@ -27,7 +27,7 @@ type SimulationRun struct {
 	LineupName     string   `json:"lineup_name"`
 	Team           string   `json:"team"`
 	Year           int      `json:"year"`
-	LineupRevision int64    `json:"lineup_revision"`
+	LineupRevision int64    `json:"lineup_revision,omitempty"`
 	BatterIDs      []int64  `json:"batter_ids"`
 	Batters        []Batter `json:"batters"`
 	SimulationResult
@@ -56,13 +56,44 @@ func (s *Server) runSimulation(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, "simulation requests must not include a body")
 		return
 	}
+	s.recordSimulation(w, r, lineup)
+}
+
+func (s *Server) runCurrentSimulation(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Team      string  `json:"team"`
+		Year      int     `json:"year"`
+		BatterIDs []int64 `json:"batter_ids"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16384))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		apiError(w, http.StatusBadRequest, "invalid current lineup request")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		apiError(w, http.StatusBadRequest, "request must contain one JSON value")
+		return
+	}
+	input.Team = strings.TrimSpace(input.Team)
+	batters, ok := s.resolveBatters(w, r, input.Team, input.Year, input.BatterIDs)
+	if !ok {
+		return
+	}
+	s.recordSimulation(w, r, SavedLineup{
+		Name: "Current lineup", Team: input.Team, Year: input.Year,
+		BatterIDs: input.BatterIDs, Batters: batters,
+	})
+}
+
+func (s *Server) recordSimulation(w http.ResponseWriter, r *http.Request, lineup SavedLineup) {
 	if s.Simulate == nil || s.History == nil {
 		apiError(w, http.StatusServiceUnavailable, "simulation history unavailable")
 		return
 	}
 	result, err := s.Simulate(r.Context(), lineup.Batters)
 	if err != nil || !validSimulationResult(result) {
-		log.Printf("simulate saved lineup: %v", err)
+		log.Printf("simulate lineup: %v", err)
 		apiError(w, http.StatusBadGateway, "simulation did not return a valid result")
 		return
 	}

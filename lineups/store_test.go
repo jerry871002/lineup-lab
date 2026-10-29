@@ -65,6 +65,13 @@ func setupTestDatabase(t *testing.T, upgrade bool) *sql.DB {
 	if _, err := db.Exec("SELECT id FROM simulation_runs LIMIT 0"); err != nil {
 		t.Fatal(err)
 	}
+	var nullableRevision string
+	if err := db.QueryRow("SELECT is_nullable FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='simulation_runs' AND column_name='lineup_revision'").Scan(&nullableRevision); err != nil {
+		t.Fatal(err)
+	}
+	if nullableRevision != "YES" {
+		t.Fatal("fresh bootstrap must allow unsaved-run NULL revisions")
+	}
 	if upgrade {
 		if _, err := db.Exec("DROP TABLE simulation_runs"); err != nil {
 			t.Fatal(err)
@@ -90,6 +97,15 @@ func setupTestDatabase(t *testing.T, upgrade bool) *sql.DB {
 			if _, err := db.Exec(string(historyMigration)); err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+	currentMigration, err := os.ReadFile(filepath.Join("..", "postgres", "migrations", "20261029190000_lineups_allow_current_simulations.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := db.Exec(string(currentMigration)); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if _, err := db.Exec("INSERT INTO users(id,username,email,password_hash) VALUES (7,'first','first@example.com','test-only'),(8,'second','second@example.com','test-only')"); err != nil {

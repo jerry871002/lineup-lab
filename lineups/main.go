@@ -82,6 +82,7 @@ func (s *Server) Handler() http.Handler {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("GET /simulations", s.listSimulations)
+	mux.HandleFunc("POST /simulations", s.runCurrentSimulation)
 	mux.HandleFunc("POST /lineups/{id}/simulations", s.runSimulation)
 	mux.HandleFunc("GET /lineups", s.list)
 	mux.HandleFunc("POST /lineups", s.save)
@@ -98,7 +99,7 @@ func (s *Server) Handler() http.Handler {
 			}
 		}
 		budget := crudRequestTimeout
-		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/lineups/") && strings.HasSuffix(r.URL.Path, "/simulations") {
+		if r.Method == http.MethodPost && (r.URL.Path == "/simulations" || (strings.HasPrefix(r.URL.Path, "/lineups/") && strings.HasSuffix(r.URL.Path, "/simulations"))) {
 			budget = s.simulationBudget()
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), budget)
@@ -201,40 +202,8 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, "name, team, year and nine unique batter IDs are required; updates require revision")
 		return
 	}
-	seen := make(map[int64]bool, 9)
-	for _, batterID := range input.BatterIDs {
-		if batterID <= 0 || seen[batterID] {
-			apiError(w, http.StatusBadRequest, "nine unique positive batter IDs are required")
-			return
-		}
-		seen[batterID] = true
-	}
-	roster, err := s.Roster(r.Context(), input.Team, input.Year)
-	if err != nil {
-		log.Printf("load roster: %v", err)
-		apiError(w, http.StatusServiceUnavailable, "roster unavailable")
-		return
-	}
-	byID := make(map[int64]Batter, len(roster))
-	for _, batter := range roster {
-		byID[batter.ID] = batter
-	}
-	batters := make([]Batter, 9)
-	names := make(map[string]bool, 9)
-	canRecordOut := false
-	for i, batterID := range input.BatterIDs {
-		batter, exists := byID[batterID]
-		name := strings.ToLower(strings.TrimSpace(batter.Name))
-		if !exists || name == "" || names[name] || batter.AtBat <= 0 || batter.Hit < 0 || batter.Hit > batter.AtBat || batter.Double < 0 || batter.Triple < 0 || batter.HomeRun < 0 || batter.BallOnBase < 0 || batter.HitByPitch < 0 || batter.Double+batter.Triple+batter.HomeRun > batter.Hit {
-			apiError(w, http.StatusBadRequest, "batters must be valid members of the selected team-season")
-			return
-		}
-		names[name] = true
-		canRecordOut = canRecordOut || batter.AtBat > batter.Hit
-		batters[i] = batter
-	}
-	if !canRecordOut {
-		apiError(w, http.StatusBadRequest, "lineup must be able to record an out")
+	batters, ok := s.resolveBatters(w, r, input.Team, input.Year, input.BatterIDs)
+	if !ok {
 		return
 	}
 	item, err := s.Store.Save(r.Context(), userID(r), id, input, batters)
@@ -248,6 +217,50 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "/api/lineups/"+strconv.FormatInt(item.ID, 10))
 	}
 	writeJSON(w, code, item)
+}
+
+func (s *Server) resolveBatters(w http.ResponseWriter, r *http.Request, team string, year int, batterIDs []int64) ([]Batter, bool) {
+	if team == "" || len([]rune(team)) > 100 || year < 1900 || year > 2100 || len(batterIDs) != 9 {
+		apiError(w, http.StatusBadRequest, "team, year and nine unique batter IDs are required")
+		return nil, false
+	}
+	seen := make(map[int64]bool, 9)
+	for _, batterID := range batterIDs {
+		if batterID <= 0 || seen[batterID] {
+			apiError(w, http.StatusBadRequest, "nine unique positive batter IDs are required")
+			return nil, false
+		}
+		seen[batterID] = true
+	}
+	roster, err := s.Roster(r.Context(), team, year)
+	if err != nil {
+		log.Printf("load roster: %v", err)
+		apiError(w, http.StatusServiceUnavailable, "roster unavailable")
+		return nil, false
+	}
+	byID := make(map[int64]Batter, len(roster))
+	for _, batter := range roster {
+		byID[batter.ID] = batter
+	}
+	batters := make([]Batter, 9)
+	names := make(map[string]bool, 9)
+	canRecordOut := false
+	for i, batterID := range batterIDs {
+		batter, exists := byID[batterID]
+		name := strings.ToLower(strings.TrimSpace(batter.Name))
+		if !exists || name == "" || names[name] || batter.AtBat <= 0 || batter.Hit < 0 || batter.Hit > batter.AtBat || batter.Double < 0 || batter.Triple < 0 || batter.HomeRun < 0 || batter.BallOnBase < 0 || batter.HitByPitch < 0 || batter.Double+batter.Triple+batter.HomeRun > batter.Hit {
+			apiError(w, http.StatusBadRequest, "batters must be valid members of the selected team-season")
+			return nil, false
+		}
+		names[name] = true
+		canRecordOut = canRecordOut || batter.AtBat > batter.Hit
+		batters[i] = batter
+	}
+	if !canRecordOut {
+		apiError(w, http.StatusBadRequest, "lineup must be able to record an out")
+		return nil, false
+	}
+	return batters, true
 }
 
 func (s *Server) remove(w http.ResponseWriter, r *http.Request) {

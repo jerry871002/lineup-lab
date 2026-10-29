@@ -103,17 +103,17 @@ try the simulator. For an existing database, follow the
 
 1. Open the app and register an account with a password of at least 15 characters.
 2. Select **Demo Comets (Synthetic), 2024**. These 12 fictional hitters are seeded for first-run exploration.
-3. Drag nine distinct hitters into batting-order slots. Use **Simulate** for a temporary result.
-4. Enter a lineup name and choose **Save as new lineup**. Use **Simulate and record** to compute the latest saved revision and add it to your personal history.
+3. Drag nine distinct hitters into batting-order slots. Click **Simulate** to try the current order and automatically record the result. Change the order and click again whenever you want.
+4. Optionally enter a lineup name and choose **Save as new lineup** to keep a favorite combination. Saving is independent of simulation.
 5. Refresh the page, select the saved lineup, and choose **Load selected lineup** to restore the ordered batting snapshot. Use **Update loaded lineup** to save further edits.
 6. Inspect **My simulation history** for scores, sample counts, engine versions, and the exact batting order used. Personal practice results remain available after a saved lineup is edited or deleted.
 
 Auth and lineups stay internal to Compose. The gateway authenticates each personal-resource request and checks signed CSRF on writes; storage queries additionally scope every resource to its owner. The UI clears private state when a session expires or the user logs out.
 
-For existing database volumes, import demo data as documented in [postgres/README.md](postgres/README.md) and apply both saved-lineup migrations in order before starting the new service:
+For existing database volumes, import demo data as documented in [postgres/README.md](postgres/README.md) and apply the saved-lineup and current-simulation migrations in order before starting the new service:
 
 ```sh
-for migration in postgres/migrations/20261028190000_lineups_create_saved_lineups.sql postgres/migrations/20261028230000_lineups_create_simulation_runs.sql; do
+for migration in postgres/migrations/20261028190000_lineups_create_saved_lineups.sql postgres/migrations/20261028230000_lineups_create_simulation_runs.sql postgres/migrations/20261029190000_lineups_allow_current_simulations.sql; do
   docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$migration"
 done
 ```

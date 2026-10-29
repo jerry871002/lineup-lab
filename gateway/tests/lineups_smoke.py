@@ -146,6 +146,33 @@ def main():
         simulate(owner, selected)
         print("PASS: demo roster, live IDs, and strict eight-field simulation payload")
 
+        current_input = {"team": team["name"], "year": team["year"], "batter_ids": batter_ids}
+        anonymous.request("POST", "/api/simulations", 401, current_input)
+        owner.request("POST", "/api/simulations", 403, current_input)
+        owner.request("POST", "/api/simulations", 403, current_input,
+                      headers={"X-Original-Method": "GET"})
+        owner.request("POST", "/api/simulations", 400,
+                      dict(current_input, average_score=999), csrf=True)
+        templates_before = owner.request("GET", "/api/lineups", 200)
+        quick = owner.request("POST", "/api/simulations", 201, current_input, csrf=True)
+        require(quick["saved_lineup_id"] is None and "lineup_revision" not in quick,
+                "current run must not invent a saved lineup or revision")
+        require(quick["batter_ids"] == batter_ids and quick["sample_count"] > 0,
+                "current run must record its exact order and actual simulation metadata")
+        changed_input = dict(current_input, batter_ids=list(reversed(batter_ids)))
+        changed = owner.request("POST", "/api/simulations", 201, changed_input, csrf=True)
+        require(changed["batter_ids"] == changed_input["batter_ids"],
+                "a changed batting order must run without saving first")
+        require(owner.request("GET", "/api/lineups", 200) == templates_before,
+                "running twice must not create or update saved lineups")
+        history = owner.request("GET", "/api/simulations", 200)
+        require(any(item["id"] == quick["id"] and item["batter_ids"] == batter_ids for item in history)
+                and any(item["id"] == changed["id"] for item in history),
+                "both unsaved orders must survive in personal history")
+        require(other.request("GET", "/api/simulations", 200) == [],
+                "another user must not see the current-lineup history")
+        print("PASS: one-click simulation, reorder and repeat without saved-lineup side effects")
+
         lineup_input = {
             "name": "MVP smoke " + uuid.uuid4().hex,
             "team": team["name"], "year": team["year"], "batter_ids": batter_ids,
@@ -214,7 +241,7 @@ def main():
                                                   "X-Authenticated-User-ID": str(owner_id)})
         other.request("POST", "/api/auth/logout", 200, csrf=True)
         print("PASS: owner deletion, session revocation, and logged-out resource protection")
-        print("MVP HTTP smoke passed. Only uniquely generated test accounts remain.")
+        print("MVP HTTP smoke passed. Only uniquely generated test accounts and their personal history remain.")
     finally:
         for lineup_id in created_ids:
             try:

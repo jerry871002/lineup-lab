@@ -33,6 +33,12 @@ private network boundary is required, not optional.
 
 ## Personal simulation history
 
+- `POST /simulations`: evaluate the current ordered lineup without saving it.
+  Send only `{"team":"Demo Comets (Synthetic)","year":2024,"batter_ids":[1,2,3,4,5,6,7,8,9]}`
+  using real roster IDs. The service resolves current canonical stats and returns
+  201 with an immutable history snapshot. It never creates or updates a saved
+  lineup. Names, owner IDs, revisions, scores, unknown fields, and trailing JSON
+  are rejected.
 - `POST /lineups/{id}/simulations`: evaluate the authenticated owner's saved
   lineup snapshot and persist the successful result. Send no request body;
   client-provided scores or batting statistics are rejected. Returns 201.
@@ -42,10 +48,13 @@ private network boundary is required, not optional.
 Each run returns `id`, `saved_lineup_id`, `lineup_name`, `team`, `year`,
 `lineup_revision`, `batter_ids`, `batters`, `average_score`, `average_hits`,
 `sample_count`, `simulator_version`, and `created_at`. The snapshot and result
-are immutable through this API. Editing or deleting a saved lineup preserves its
+are immutable through this API. Current-lineup runs have a null `saved_lineup_id`,
+use the label `Current lineup`, and omit `lineup_revision` because they have no
+saved revision. Saved-lineup runs retain their actual revision even after deletion.
+Editing or deleting a saved lineup preserves its
 history; deletion changes only `saved_lineup_id` to null.
 
-The service sends the stored nine-batter snapshot, without IDs, to the configured
+The service sends the resolved or stored nine-batter snapshot, without IDs, to the configured
 simulator. It requires finite non-negative averages, positive sample count, and
 an engine version returned by that server. Failed computations, malformed
 metadata, and client-submitted scores do not create history rows. This is personal
@@ -87,7 +96,15 @@ saved-lineups migration and before deploying this service version:
 docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < postgres/migrations/20261028230000_lineups_create_simulation_runs.sql
 ```
 
-Both migrations are repeatable and do not modify existing lineups. It assumes the
+Apply the quick-simulation migration after creating `simulation_runs`:
+
+```sh
+docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < postgres/migrations/20261029190000_lineups_allow_current_simulations.sql
+```
+
+It permits null revisions for unsaved runs and preserves existing saved-run data.
+
+The migrations are repeatable and do not modify existing lineups. It assumes the
 existing auth-owned `users` table is present. Atlas wiring remains a separate
 repository task.
 

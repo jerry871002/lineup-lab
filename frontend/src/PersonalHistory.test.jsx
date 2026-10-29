@@ -34,7 +34,7 @@ describe('PersonalHistory', () => {
     const { rerender } = render(<PersonalHistory refreshToken={0} />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Network offline');
     await user.click(screen.getByRole('button', { name: 'Retry history' }));
-    expect(await screen.findByText(/Save a lineup, then choose/)).toBeInTheDocument();
+    expect(await screen.findByText(/Run a simulation to start/)).toBeInTheDocument();
     rerender(<PersonalHistory refreshToken={1} />);
     expect(await screen.findByText('Opening order')).toBeInTheDocument();
   });
@@ -46,4 +46,14 @@ describe('PersonalHistory', () => {
     unmount();
     expect(signal.aborted).toBe(true);
   });
+  it('shows a current-lineup run without inventing a saved revision', async () => {
+    const current = { ...run, lineup_name: 'Current lineup' };
+    delete current.lineup_revision;
+    global.fetch = vi.fn(() => response([current]));
+    render(<PersonalHistory />);
+    expect(await screen.findByRole('heading', { name: 'Current lineup' })).toBeInTheDocument();
+    expect(screen.queryByText(/Saved revision/)).not.toBeInTheDocument();
+    expect(screen.getByText('4.50')).toBeInTheDocument();
+  });
+
 });
