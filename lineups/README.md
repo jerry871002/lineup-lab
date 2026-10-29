@@ -67,6 +67,12 @@ upstream time for a run.
 - `SIMULATION_TIMEOUT`: positive Go duration for the upstream run (default `85s`, for example `120s`). Invalid or overflowing budgets fail startup. If increased, configure the gateway upstream timeout to at least the resulting write budget (`135s` for `120s`).
 - `PORT`: listener port, defaults to 80.
 
+Compose sets these from `LINEUPS_DATABASE_URL`, `LINEUPS_PORT`, and the configured
+internal stats and simulation ports. The gateway routes `/api/lineups` and
+`/api/simulations` to this service after
+validating the active session and CSRF for writes. Auth and lineups publish no
+host ports. Configure the database URL in `.env` before starting the full stack.
+
 Fresh databases receive the table from `postgres/init-table.sql`. Existing
 databases must apply the additive migration before starting the service:
 
@@ -98,5 +104,8 @@ The database test creates and drops only a unique test schema. It verifies fresh
 bootstrap plus repeat migration, per-owner CRUD, snapshot/order persistence,
 duplicate names, and two concurrent writes using the same revision.
 
-The service remains private. Gateway routes and the frontend must be deployed
-with the corresponding authentication and CSRF enforcement.
+The gateway uses auth's internal verifier to enforce sessions and write CSRF
+before forwarding authenticated identity. See
+[the authorization contract](../docs/resource-authorization.md) and the real
+service smoke check at `gateway/tests/lineups_smoke.py`. The saved-lineup
+component is integrated into the App separately under #35.

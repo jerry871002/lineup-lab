@@ -5,12 +5,14 @@ services:
       dockerfile: gateway/Dockerfile
     environment:
       AUTH_PORT: ${AUTH_PORT:-8000}
+      LINEUPS_PORT: ${LINEUPS_PORT:-80}
       STATS_PORT: ${STATS_PORT:-80}
       SIMULATION_PORT: ${SIMULATION_PORT:-80}
     ports:
       - 8080:80
     depends_on:
       - auth
+      - lineups
       - stats
       - simulation
 
@@ -25,6 +27,18 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     depends_on:
       - postgres
+
+  lineups:
+    build: ./lineups
+    environment:
+      PORT: ${LINEUPS_PORT:-80}
+      DATABASE_URL: ${LINEUPS_DATABASE_URL:?LINEUPS_DATABASE_URL must be set}
+      STATS_BASE_URL: http://stats:${STATS_PORT:-80}
+      SIMULATION_BASE_URL: http://simulation:${SIMULATION_PORT:-80}
+    depends_on:
+      - postgres
+      - stats
+      - simulation
 
   simulation:
     build: ./simulation

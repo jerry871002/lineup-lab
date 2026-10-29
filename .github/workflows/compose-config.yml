@@ -12,6 +12,8 @@ on:
       - "frontend/**"
       - "simulation/**"
       - "stats/**"
+      - "lineups/**"
+      - "postgres/**"
   pull_request:
     branches: [ "main" ]
     paths:
@@ -23,6 +25,8 @@ on:
       - "frontend/**"
       - "simulation/**"
       - "stats/**"
+      - "lineups/**"
+      - "postgres/**"
   workflow_dispatch:
 
 jobs:
@@ -40,6 +44,7 @@ jobs:
 
       - name: Render default Compose config
         run: |
+          LINEUPS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           AUTH_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           STATS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           docker compose config --format json > compose-default.json
@@ -58,6 +63,10 @@ jobs:
           pgadmin_service = services["pgadmin"]
           auth_service = services["auth"]
           stat_service = services["stats"]
+          lineups_service = services["lineups"]
+          assert not lineups_service.get("ports")
+          assert not auth_service.get("ports")
+          assert "SESSION_HMAC_SECRET" not in lineups_service["environment"]
           gateway_port = gateway_service["ports"][0]
           stat_port = services["stats"]["ports"][0]
           simulation_port = services["simulation"]["ports"][0]
@@ -65,6 +74,10 @@ jobs:
           assert gateway_service["build"]["context"].endswith("lineup-lab")
           assert gateway_service["build"]["dockerfile"] == "gateway/Dockerfile"
           assert gateway_service["environment"]["AUTH_PORT"] == "8000"
+          assert gateway_service["environment"]["LINEUPS_PORT"] == "80"
+          assert lineups_service["environment"]["DATABASE_URL"] == "postgres://myuser:change-me@postgres/mydatabase?sslmode=disable"
+          assert lineups_service["environment"]["STATS_BASE_URL"] == "http://stats:80"
+          assert lineups_service["environment"]["SIMULATION_BASE_URL"] == "http://simulation:80"
           assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
           assert db_service["environment"]["POSTGRES_USER"] == "myuser"
           assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
@@ -83,8 +96,10 @@ jobs:
 
       - name: Render Compose config with overridden service ports
         run: |
+          LINEUPS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           AUTH_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           AUTH_PORT=18000 \
+          LINEUPS_PORT=18002 \
           STATS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
           STATS_PORT=18080 \
           STATS_HOST_PORT=19082 \
@@ -106,6 +121,10 @@ jobs:
           pgadmin_service = services["pgadmin"]
           auth_service = services["auth"]
           stat_service = services["stats"]
+          lineups_service = services["lineups"]
+          assert not lineups_service.get("ports")
+          assert not auth_service.get("ports")
+          assert "SESSION_HMAC_SECRET" not in lineups_service["environment"]
           simulation_service = services["simulation"]
           gateway_port = gateway_service["ports"][0]
           stat_port = stat_service["ports"][0]
@@ -114,6 +133,10 @@ jobs:
           assert gateway_service["build"]["context"].endswith("lineup-lab")
           assert gateway_service["build"]["dockerfile"] == "gateway/Dockerfile"
           assert gateway_service["environment"]["AUTH_PORT"] == "18000"
+          assert gateway_service["environment"]["LINEUPS_PORT"] == "18002"
+          assert lineups_service["environment"]["PORT"] == "18002"
+          assert lineups_service["environment"]["STATS_BASE_URL"] == "http://stats:18080"
+          assert lineups_service["environment"]["SIMULATION_BASE_URL"] == "http://simulation:18081"
           assert db_service["environment"]["POSTGRES_DB"] == "mydatabase"
           assert db_service["environment"]["POSTGRES_USER"] == "myuser"
           assert db_service["environment"]["POSTGRES_PASSWORD"] == "change-me"
@@ -134,7 +157,8 @@ jobs:
 
       - name: Verify missing required env fails fast
         run: |
-          if AUTH_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
+          if LINEUPS_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
+            AUTH_DATABASE_URL=postgres://myuser:change-me@postgres/mydatabase?sslmode=disable \
             docker compose config >/tmp/compose-missing-env.log 2>&1; then
             echo "docker compose config unexpectedly succeeded without required env vars"
             exit 1
@@ -152,6 +176,7 @@ jobs:
       PGADMIN_DEFAULT_PASSWORD: change-me
       STATS_DATABASE_URL: postgres://myuser:change-me@postgres/mydatabase?sslmode=disable
       AUTH_DATABASE_URL: postgres://myuser:change-me@postgres/mydatabase?sslmode=disable
+      LINEUPS_DATABASE_URL: postgres://myuser:change-me@postgres/mydatabase?sslmode=disable
       SESSION_HMAC_SECRET: test-session-secret
       SIMULATION_DEBUG: "1"
     steps:
@@ -228,6 +253,9 @@ jobs:
         run: |
           status="$(curl -s -o users-me.json -w '%{http_code}' http://localhost:8080/api/users/me)"
           test "$status" = "401"
+
+      - name: Verify protected lineups through real services
+        run: python3 gateway/tests/lineups_smoke.py
 
       - name: Tear down Docker Compose stack
         if: always()
