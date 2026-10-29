@@ -3,6 +3,8 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import Lineup from './Lineup.jsx';
 import Roster from './Roster.jsx';
+import SavedLineups from './SavedLineups.jsx';
+import PersonalHistory from './PersonalHistory.jsx';
 import './App.css';
 
 const apiBasePath = '/api';
@@ -62,6 +64,14 @@ const parseAPIError = async (response) => {
   }
 };
 
+const decoratePlayer = player => ({
+  ...player,
+  avg: player.at_bat > 0 ? player.hit / player.at_bat : 0,
+  obp: player.at_bat + player.ball_on_base + player.hit_by_pitch > 0
+    ? (player.hit + player.ball_on_base + player.hit_by_pitch) / (player.at_bat + player.ball_on_base + player.hit_by_pitch) : 0,
+  slg: player.at_bat > 0 ? (player.hit + player.double + 2 * player.triple + 3 * player.home_run) / player.at_bat : 0,
+});
+
 const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [authStatus, setAuthStatus] = useState('loading');
@@ -78,9 +88,24 @@ const App = () => {
   const logoutPending = useRef(false);
   const workspaceVersion = useRef(0);
   const [teams, setTeams] = useState([]);
-  const [selectedTeam, setSelectedTeam] = useState('');
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [teamsError, setTeamsError] = useState('');
+  const [teamsReload, setTeamsReload] = useState(0);
+  const [selectedTeam, setSelectedTeamState] = useState('');
+  const selectedTeamRef = useRef('');
+  const setSelectedTeam = value => { selectedTeamRef.current = value; setSelectedTeamState(value); };
   const [players, setPlayers] = useState([]);
-  const [lineup, setLineup] = useState(Array(9).fill(null));
+  const [lineup, setLineupState] = useState(Array(9).fill(null));
+  const lineupRef = useRef(lineup);
+  const setLineup = value => { lineupRef.current = value; setLineupState(value); };
+  const [rosterReload, setRosterReload] = useState(0);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState('');
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationError, setSimulationError] = useState('');
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const simulationRequest = useRef(null);
+  const simulationVersion = useRef(0);
   const [simulationResult, setSimulationResult] = useState(null);
 
   useEffect(() => {
@@ -119,6 +144,8 @@ const App = () => {
     }
 
     let active = true;
+    setTeamsLoading(true);
+    setTeamsError('');
     fetch(`${apiBasePath}/teams`)
       .then(response => {
         if (!response.ok) {
@@ -128,52 +155,71 @@ const App = () => {
         return response.json();
       })
       .then(data => {
-        if (active) setTeams(Array.isArray(data) ? data : []);
+        if (!active) return;
+        const available = Array.isArray(data) ? [...data] : [];
+        const key = selectedTeamRef.current;
+        if (key) {
+          const separator = key.lastIndexOf('+');
+          const name = key.slice(0, separator);
+          const year = Number(key.slice(separator + 1));
+          if (!available.some(team => team.name === name && team.year === year)) available.push({ name, year });
+        }
+        setTeams(available);
       })
-      .catch(error => console.error('Error fetching teams:', error));
+      .catch(() => { if (active) setTeamsError('Could not load teams. Please try again.'); })
+      .finally(() => { if (active) setTeamsLoading(false); });
     return () => { active = false; };
-  }, [authStatus]);
+  }, [authStatus, teamsReload]);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+    const version = workspaceVersion.current;
     if (authStatus === 'authenticated' && selectedTeam) {
-      const [name, year] = selectedTeam.split('+');
-      fetch(`${apiBasePath}/batting?team=${name}&year=${year}`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('Failed to fetch roster');
-          }
-
-          return response.json();
+      const separator = selectedTeam.lastIndexOf('+');
+      const name = selectedTeam.slice(0, separator);
+      const year = selectedTeam.slice(separator + 1);
+      setRosterLoading(true);
+      setRosterError('');
+      fetch(`${apiBasePath}/batting?${new URLSearchParams({ team: name, year })}`, { signal: controller.signal })
+        .then(async response => {
+          if (!response.ok) throw new Error('Could not load the roster. Please choose the team again.');
+          const data = await response.json();
+          if (!Array.isArray(data)) throw new Error('The roster response could not be read.');
+          if (controller.signal.aborted || version !== workspaceVersion.current) return;
+          const occupied = new Set(lineupRef.current.filter(Boolean).map(player => player.id ?? player.name));
+          setPlayers(data.map(decoratePlayer).filter(player => !occupied.has(player.id ?? player.name)).sort((a, b) => a.name.localeCompare(b.name)));
         })
-        .then(data => {
-          if (!active) return;
-          if (!Array.isArray(data)) {
-            setPlayers([]);
-            return;
-          }
-
-          // add AVG, OBP, SLG to the player data
-          data.map(player => {
-            player.avg = player.hit / player.at_bat;
-            player.obp = (player.hit + player.ball_on_base + player.hit_by_pitch) / (player.at_bat + player.ball_on_base + player.hit_by_pitch);
-            player.slg = (player.hit + player.double + 2 * player.triple + 3 * player.home_run) / player.at_bat;
-            return player;
-          });
-          setPlayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+        .catch(error => {
+          if (!controller.signal.aborted && version === workspaceVersion.current) setRosterError(error.message);
         })
-        .catch(error => console.error('Error fetching players:', error));
+        .finally(() => {
+          if (!controller.signal.aborted && version === workspaceVersion.current) setRosterLoading(false);
+        });
     }
-    return () => { active = false; };
-  }, [authStatus, selectedTeam]);
+    return () => controller.abort();
+  }, [authStatus, selectedTeam, rosterReload]);
+
+  const cancelSimulation = () => {
+    simulationVersion.current += 1;
+    simulationRequest.current?.abort();
+    simulationRequest.current = null;
+    setIsSimulating(false);
+    setSimulationError('');
+    setSimulationResult(null);
+  };
 
   const onTeamChange = (event) => {
+    workspaceVersion.current += 1;
+    cancelSimulation();
+    setPlayers([]);
+    setRosterError('');
     setSelectedTeam(event.target.value);
     setLineup(Array(9).fill(null));
+    setRosterReload(value => value + 1);
   };
 
   const movePlayerToSlot = (player, index) => {
-    setSimulationResult(null);
+    cancelSimulation();
 
     const newLineup = [...lineup];
     const existingPlayer = newLineup[index];
@@ -202,7 +248,7 @@ const App = () => {
   };
 
   const removePlayerFromSlot = (index) => {
-    setSimulationResult(null);
+    cancelSimulation();
     const player = lineup[index];
     const newLineup = [...lineup];
     newLineup[index] = null;
@@ -211,28 +257,93 @@ const App = () => {
   };
 
   const simulateLineup = async () => {
-    const batters = lineup.map(player => player ? {
-      name: player.name,
-      at_bat: player.at_bat,
-      hit: player.hit,
-      double: player.double,
-      triple: player.triple,
-      home_run: player.home_run,
-      ball_on_base: player.ball_on_base,
-      hit_by_pitch: player.hit_by_pitch,
-    } : null);
+    if (simulationRequest.current || lineup.some(player => !player)) return;
+    const controller = new AbortController();
+    simulationRequest.current = controller;
+    const version = simulationVersion.current;
+    const workspace = workspaceVersion.current;
+    setIsSimulating(true);
+    setSimulationError('');
+    setSimulationResult(null);
+    const batters = lineup.map(({ name, at_bat, hit, double, triple, home_run, ball_on_base, hit_by_pitch }) => ({
+      name, at_bat, hit, double, triple, home_run, ball_on_base, hit_by_pitch,
+    }));
+    try {
+      const response = await fetch(`${apiBasePath}/simulate`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batters),
+      });
+      if (!response.ok) throw new Error('Simulation failed. Please check the lineup and try again.');
+      const result = await response.json();
+      if (!Number.isFinite(result.average_score) || !Number.isFinite(result.average_hits)) throw new Error('The simulation response could not be read.');
+      if (!controller.signal.aborted && workspace === workspaceVersion.current && version === simulationVersion.current) setSimulationResult(result);
+    } catch (error) {
+      if (!controller.signal.aborted && workspace === workspaceVersion.current && version === simulationVersion.current) setSimulationError(error.message || 'Simulation failed. Please try again.');
+    } finally {
+      if (simulationRequest.current === controller) {
+        simulationRequest.current = null;
+        setIsSimulating(false);
+      }
+    }
+  };
 
+  const leaveExpiredSession = () => {
+    setCurrentUser(null);
+    setAuthStatus('anonymous');
+    setAuthMessage('Your session expired. Please log in again.');
+    resetWorkspace();
+  };
+
+  const loadSavedLineup = saved => {
+    if (!Array.isArray(saved.batters) || saved.batters.length !== 9) throw new Error('The saved lineup could not be read.');
+    workspaceVersion.current += 1;
+    cancelSimulation();
+    const teamKey = `${saved.team}+${saved.year}`;
+    setTeams(previous => previous.some(team => team.name === saved.team && team.year === saved.year)
+      ? previous : [...previous, { name: saved.team, year: saved.year }]);
+    setPlayers([]);
+    setSelectedTeam(teamKey);
+    setLineup(saved.batters.map(decoratePlayer));
+    setRosterReload(value => value + 1);
+  };
+
+  const simulateSavedLineup = async (saved, signal) => {
+    if (simulationRequest.current) throw new Error('A simulation is already running.');
     const version = workspaceVersion.current;
-    const response = await fetch(`${apiBasePath}/simulate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(batters),
-    });
-    const result = await response.json();
-    console.log(result);
-    if (version === workspaceVersion.current) setSimulationResult(result);
+    const operation = new AbortController();
+    const abort = () => operation.abort();
+    if (signal.aborted) operation.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    simulationRequest.current = operation;
+    setIsSimulating(true);
+    setSimulationError('');
+    setSimulationResult(null);
+    try {
+      const response = await fetch(`${apiBasePath}/lineups/${saved.id}/simulations`, {
+        method: 'POST', credentials: 'same-origin', signal: operation.signal,
+        headers: { 'X-CSRF-Token': readCookie(csrfCookieName) || '' },
+      });
+      if (!response.ok) {
+        const error = new Error(await parseAPIError(response));
+        error.status = response.status;
+        throw error;
+      }
+      const result = await response.json();
+      if (operation.signal.aborted) throw new DOMException('Request cancelled', 'AbortError');
+      if (version !== workspaceVersion.current) return;
+      if (!Number.isFinite(result.average_score) || !Number.isFinite(result.average_hits)) throw new Error('The recorded result could not be read.');
+      loadSavedLineup(result);
+      setSimulationResult(result);
+      setHistoryRefresh(value => value + 1);
+    } finally {
+      signal.removeEventListener('abort', abort);
+      if (simulationRequest.current === operation) {
+        simulationRequest.current = null;
+        setIsSimulating(false);
+      }
+    }
   };
 
   const onAuthFormChange = (event) => {
@@ -245,6 +356,11 @@ const App = () => {
 
   const resetWorkspace = () => {
     workspaceVersion.current += 1;
+    cancelSimulation();
+    setRosterError('');
+    setRosterLoading(false);
+    setTeamsLoading(false);
+    setTeamsError('');
     setTeams([]);
     setSelectedTeam('');
     setPlayers([]);
@@ -456,6 +572,7 @@ const App = () => {
       )}
 
       {authStatus === 'authenticated' && (
+        <>
         <div className="container">
           <div className="card">
             <Lineup
@@ -464,12 +581,24 @@ const App = () => {
               removePlayerFromSlot={removePlayerFromSlot}
               simulateLineup={simulateLineup}
               simulationResult={simulationResult}
+              canSimulate={lineup.every(Boolean)}
+              isSimulating={isSimulating}
+              simulationError={simulationError}
             />
           </div>
           <div className="card">
+            {teamsLoading && <p role="status">Loading teams...</p>}
+            {teamsError && <p role="alert">{teamsError} <button type="button" onClick={() => setTeamsReload(value => value + 1)}>Retry teams</button></p>}
+            {rosterLoading && <p role="status">Loading roster...</p>}
+            {rosterError && <p role="alert">{rosterError} <button type="button" onClick={() => setRosterReload(value => value + 1)}>Retry roster</button></p>}
             <Roster players={players} teams={teams} selectedTeam={selectedTeam} onTeamChange={onTeamChange} />
           </div>
         </div>
+        <div className="container">
+          <SavedLineups key={`saved-${currentUser.id}`} selectedTeam={selectedTeam} lineup={lineup} onLoad={loadSavedLineup} onSessionExpired={leaveExpiredSession} onSimulate={simulateSavedLineup} simulationBusy={isSimulating} />
+        </div>
+        <PersonalHistory key={`history-${currentUser.id}`} refreshToken={historyRefresh} onSessionExpired={leaveExpiredSession} />
+        </>
       )}
     </DndProvider>
   );

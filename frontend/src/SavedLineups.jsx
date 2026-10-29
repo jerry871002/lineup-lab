@@ -61,7 +61,7 @@ const request = async (path, signal, method = 'GET', body) => {
   return data;
 };
 
-const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired }) => {
+const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired, onSimulate, simulationBusy = false }) => {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [current, setCurrent] = useState(null);
@@ -85,7 +85,7 @@ const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired }) => {
     try {
       await action(controller.signal);
     } catch (failure) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || failure.name === 'AbortError') return;
       if (failure.status === 401) {
         setItems([]);
         setSelectedId('');
@@ -193,6 +193,13 @@ const SavedLineups = ({ selectedTeam, lineup, onLoad, onSessionExpired }) => {
           <button type="button" onClick={() => save(true)} disabled={busy || !canSave || !current}>Update loaded lineup</button>
         </div>
       </form>
+      {onSimulate && <div className="saved-lineups-actions">
+        <button type="button" disabled={busy || simulationBusy || !current} onClick={() => run(async signal => {
+          await onSimulate(current, signal);
+          if (!signal.aborted) setMessage('Simulation recorded in your history.');
+        })}>Simulate and record</button>
+        <p>Runs the latest saved revision on the server. Update it first to include your latest edits.</p>
+      </div>}
       {busy && <p role="status">Working on saved lineups...</p>}
       {message && <p role="status">{message}</p>}
       {error && <p role="alert">{error}</p>}

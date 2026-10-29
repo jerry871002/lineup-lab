@@ -1,0 +1,22 @@
+.personal-history {
+    box-sizing: border-box;
+    max-width: 940px;
+    margin: 20px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.history-run {
+    padding: 12px 0;
+    border-top: 1px solid #ddd;
+}
+
+.history-run h3 { margin: 0; }
+.history-run p { overflow-wrap: anywhere; }
+.history-run summary { cursor: pointer; }
+
+@media (max-width: 980px) {
+    .personal-history { margin: 20px; }
+}

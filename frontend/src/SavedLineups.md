@@ -32,6 +32,8 @@ instead of silently replacing edits. All requests are serialized, use the same
 origin, and abort on unmount. Writes send the readable CSRF cookie after handling
 the auth service's quoted cookie format.
 
-This PR supplies the component only. It does not mount it in App or expose API
-routes. Gateway session/CSRF enforcement and the lineups service must be deployed
-before integration is considered complete.
+The App adapter now mounts this panel inside the authenticated workspace, restores
+snapshot display statistics, refreshes the remaining roster, and clears obsolete
+results. `onSimulate(savedItem, signal)` computes the latest server-saved revision
+through the protected history endpoint; `simulationBusy` prevents concurrent runs.
+PersonalHistory refreshes after a recorded run and both panels remount per user.

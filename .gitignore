@@ -7,3 +7,8 @@ __pycache__/
 coverage.out
 coverage.txt
 coverage/
+
+# Local application credentials and session secrets
+.env
+.env.local
+.env.*.local
